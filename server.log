@@ -1,0 +1,148 @@
+
+> llm-app@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, using available port 3001 instead.
+   ▲ Next.js 15.3.5
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.40.134:3001
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 1923ms
+ ○ Compiling / ...
+ ✓ Compiled / in 2.5s (752 modules)
+ GET / 200 in 3331ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 777ms (453 modules)
+ GET /favicon.ico 200 in 1143ms
+ ○ Compiling /api/chat ...
+ ✓ Compiled /api/chat in 2.5s (1014 modules)
+ ✓ Compiled in 767ms (330 modules)
+ GET / 200 in 771ms
+ GET / 200 in 50ms
+[Error [ClientError]: [VertexAI.ClientError]: got status: 404 Not Found. {"error":{"code":404,"message":"Publisher Model `projects/tecnos-cbp/locations/us-central1/publishers/google/models/gemini-1.5-flash-001` was not found or your project does not have access to it. Please ensure you are using a valid model version. For more information, see: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions","status":"NOT_FOUND"}}] {
+  stackTrace: [Error: Publisher Model `projects/tecnos-cbp/locations/us-central1/publishers/google/models/gemini-1.5-flash-001` was not found or your project does not have access to it. Please ensure you are using a valid model version. For more information, see: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions] {
+    code: 404,
+    status: 'NOT_FOUND',
+    errorDetails: undefined
+  },
+  [cause]: [Error: Publisher Model `projects/tecnos-cbp/locations/us-central1/publishers/google/models/gemini-1.5-flash-001` was not found or your project does not have access to it. Please ensure you are using a valid model version. For more information, see: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions] {
+    code: 404,
+    status: 'NOT_FOUND',
+    errorDetails: undefined
+  }
+}
+Error in chat API: [Error [ClientError]: [VertexAI.ClientError]: got status: 404 Not Found. {"error":{"code":404,"message":"Publisher Model `projects/tecnos-cbp/locations/us-central1/publishers/google/models/gemini-1.5-flash-001` was not found or your project does not have access to it. Please ensure you are using a valid model version. For more information, see: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions","status":"NOT_FOUND"}}] {
+  stackTrace: [Error: Publisher Model `projects/tecnos-cbp/locations/us-central1/publishers/google/models/gemini-1.5-flash-001` was not found or your project does not have access to it. Please ensure you are using a valid model version. For more information, see: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions] {
+    code: 404,
+    status: 'NOT_FOUND',
+    errorDetails: undefined
+  },
+  [cause]: [Error: Publisher Model `projects/tecnos-cbp/locations/us-central1/publishers/google/models/gemini-1.5-flash-001` was not found or your project does not have access to it. Please ensure you are using a valid model version. For more information, see: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions] {
+    code: 404,
+    status: 'NOT_FOUND',
+    errorDetails: undefined
+  }
+}
+ POST /api/chat 500 in 4474ms
+ ✓ Compiled in 1036ms (767 modules)
+ GET / 200 in 296ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 146ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 631ms (453 modules)
+ GET /favicon.ico 200 in 979ms
+ ✓ Compiled /api/chat in 312ms (684 modules)
+ POST /api/chat 200 in 3228ms
+ POST /api/chat 200 in 4339ms
+ ✓ Compiled in 998ms (767 modules)
+ GET / 200 in 341ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 194ms
+ ✓ Compiled /favicon.ico in 167ms (453 modules)
+ GET /favicon.ico 200 in 541ms
+ GET / 200 in 170ms
+ GET /favicon.ico 200 in 8ms
+ ✓ Compiled in 975ms (767 modules)
+ GET / 200 in 337ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 183ms
+ ✓ Compiled /favicon.ico in 210ms (453 modules)
+ GET /favicon.ico 200 in 537ms
+ ○ Compiling /api/chat ...
+ ✓ Compiled /api/chat in 1197ms (684 modules)
+ POST /api/chat 200 in 10111ms
+ ✓ Compiled in 546ms (330 modules)
+ ✓ Compiled in 411ms (330 modules)
+ GET / 200 in 410ms
+ GET / 200 in 42ms
+ ✓ Compiled in 215ms (330 modules)
+ GET / 200 in 196ms
+ ✓ Compiled in 213ms (330 modules)
+ GET / 200 in 35ms
+ ✓ Compiled in 638ms (767 modules)
+ GET / 200 in 285ms
+ ✓ Compiled in 211ms (330 modules)
+ GET / 200 in 61ms
+ ○ Compiling /api/chat ...
+ ✓ Compiled /api/chat in 603ms (684 modules)
+ GET / 200 in 1961ms
+Error in chat API: Error: 5 NOT_FOUND: 
+    at Object.getUsage (src\app\api\chat\route.ts:20:29)
+    at POST (src\app\api\chat\route.ts:87:39)
+  18 |   getUsage: async () => {
+  19 |     const docRef = usageTracker.getDocRef();
+> 20 |     const doc = await docRef.get();
+     |                             ^
+  21 |
+  22 |     const year_month = new Date().toISOString().slice(0, 7); // YYYY-MM format
+  23 | {
+  code: 5,
+  details: '',
+  metadata: [Metadata]
+}
+ POST /api/chat 500 in 2955ms
+ GET / 200 in 94ms
+ ✓ Compiled /favicon.ico in 265ms (686 modules)
+ GET /favicon.ico 200 in 349ms
+Error in chat API: Error: 5 NOT_FOUND: 
+    at Object.getUsage (src\app\api\chat\route.ts:20:29)
+    at POST (src\app\api\chat\route.ts:87:39)
+  18 |   getUsage: async () => {
+  19 |     const docRef = usageTracker.getDocRef();
+> 20 |     const doc = await docRef.get();
+     |                             ^
+  21 |
+  22 |     const year_month = new Date().toISOString().slice(0, 7); // YYYY-MM format
+  23 | {
+  code: 5,
+  details: '',
+  metadata: [Metadata]
+}
+ POST /api/chat 500 in 169ms
+ POST /api/chat 200 in 1748ms
+ ✓ Compiled in 941ms (767 modules)
+ GET / 200 in 438ms
+ ✓ Compiled in 245ms (330 modules)
+ GET / 200 in 41ms
+ GET / 200 in 90ms
+ ✓ Compiled /favicon.ico in 164ms (453 modules)
+ GET /favicon.ico 200 in 492ms
+ ○ Compiling /api/chat ...
+ ✓ Compiled /api/chat in 4.8s (1057 modules)
+ GET / 200 in 1052ms
+ POST /api/chat 200 in 12982ms
+ ✓ Compiled in 1022ms (767 modules)
+ GET / 200 in 399ms
+ ✓ Compiled /api/chat in 423ms (1055 modules)
+ GET / 200 in 1348ms
+ POST /api/chat 200 in 20739ms
+ ✓ Compiled in 1046ms (767 modules)
+ GET / 200 in 453ms
+ ✓ Compiled /api/chat in 387ms (1055 modules)
+ GET / 200 in 1153ms
+ POST /api/chat 200 in 19233ms
+�o�b�` �W���u���I�����܂��� (Y/N)? [?25h
+
+^C
