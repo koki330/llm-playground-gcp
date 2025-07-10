@@ -73,3 +73,14 @@
 - モデル選択のドロップダウンリストを、プロバイダーごと（Anthropic, OpenAI, Gemini）にグループ分けしました。
 - ドロップダウンの表示を、内部IDから分かりやすいモデル名に変更しました。
 - デフォルトで選択されるモデルを `Claude 3.7 Sonnet` に変更しました。
+
+### 9. セキュリティ強化: IP制限
+- **概要:** Next.js の Middleware を利用して、許可されたIPアドレスからのアクセスのみを受け付けるようにしました。
+- **実装:**
+  - `src/middleware.ts` を作成し、リクエストヘッダーの `x-forwarded-for` からIPアドレスを取得。
+  - 環境変数 `ALLOWED_IPS` に設定されたIPリストと照合し、一致しない場合は403エラーを返します。
+  - 開発環境 (`NODE_ENV=development`) では、この制限は自動的に無効になります。
+
+### 10. モデル追加: OpenAI GPT-4.1
+- **概要:** OpenAIの新しいモデル `gpt-4.1` を選択肢に追加しました。
+- **実装:** `src/context/AppContext.tsx` の `MODEL_GROUPS` に `GPT-4.1` を追加。
