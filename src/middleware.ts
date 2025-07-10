@@ -12,9 +12,11 @@ export function middleware(req: NextRequest) {
   const allowedIps = process.env.ALLOWED_IPS?.split(',') || [];
 
   // Get the request's IP address.
-  // `req.ip` is recommended as it handles `X-Forwarded-For` headers automatically
-  // in hosting platforms like Vercel, Netlify, or a custom Node.js server.
-  const requestIp = req.ip;
+  // We read the 'x-forwarded-for' header, which is the standard for identifying
+  // the originating IP address of a client connecting through a proxy server.
+  const forwardedFor = req.headers.get('x-forwarded-for');
+  // The header can contain a comma-separated list of IPs. The first one is the client's.
+  const requestIp = forwardedFor ? forwardedFor.split(',')[0].trim() : undefined;
 
   // If the IP is not available or not in the allowed list, deny access.
   if (!requestIp || !allowedIps.includes(requestIp)) {
