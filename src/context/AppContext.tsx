@@ -2,14 +2,31 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-// Define the shape of a message
+// Updated ContentPart to reference a GCS URI for images
+export interface ContentPart {
+  type: 'text' | 'image';
+  text?: string;
+  image?: {
+    gcsUri: string;
+    mediaType: string;
+    previewUrl?: string; // For frontend display
+  };
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'model';
-  content: string;
+  content: ContentPart[];
 }
 
-// Define the models that can be selected
+// Attachment now includes the previewUrl for the UI
+export interface Attachment {
+  name: string;
+  type: string;
+  gcsUri: string;
+  previewUrl: string;
+}
+
 export const MODEL_GROUPS = [
   {
     label: "Anthropic",
@@ -44,12 +61,10 @@ export const MODEL_GROUPS = [
   }
 ];
 
-// For convenience, create a flat map of all models for easy lookup
 export const AVAILABLE_MODELS = MODEL_GROUPS.reduce((acc, group) => {
   return { ...acc, ...group.models };
 }, {});
 
-// Define the shape of the context
 interface AppContextType {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -59,37 +74,52 @@ interface AppContextType {
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
   systemPrompt: string;
   setSystemPrompt: React.Dispatch<React.SetStateAction<string>>;
-  submitPrompt: (prompt: string) => void;
-  clearConversation: () => void; // Add this line
+  submitPrompt: (prompt: string, attachments: Attachment[]) => void;
+  clearConversation: () => void;
 }
 
-// Create the context
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Create the provider component
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedModel, setSelectedModel] = useState('claude-3-7-sonnet-20250219');
   const [isLoading, setIsLoading] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState(''); // Add state for system prompt
+  const [systemPrompt, setSystemPrompt] = useState('');
 
   const clearConversation = () => {
     setMessages([]);
   };
 
-  const submitPrompt = async (prompt: string) => {
+  const submitPrompt = async (prompt: string, attachments: Attachment[] = []) => {
     setIsLoading(true);
-    const newUserMessage: Message = { id: Date.now().toString(), role: 'user', content: prompt };
-    setMessages(prev => [...prev, newUserMessage]);
+
+    const content: ContentPart[] = [{ type: 'text', text: prompt }];
+    if (attachments.length > 0) {
+      attachments.forEach(file => {
+        content.push({
+          type: 'image',
+          image: { gcsUri: file.gcsUri, mediaType: file.type },
+        });
+      });
+    }
+
+    const newUserMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: content,
+    };
+
+    const newMessages = [...messages, newUserMessage];
+    setMessages(newMessages);
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          messages: [...messages, newUserMessage], 
+        body: JSON.stringify({
+          messages: newMessages,
           modelId: selectedModel,
-          systemPrompt: systemPrompt, // Send system prompt to backend
+          systemPrompt: systemPrompt,
         }),
       });
 
@@ -102,23 +132,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       let modelResponse = '';
       const modelMessageId = Date.now().toString() + '-model';
 
-      // Add a placeholder for the model's response
-      setMessages(prev => [...prev, { id: modelMessageId, role: 'model', content: '...' }]);
+      setMessages(prev => [...prev, { id: modelMessageId, role: 'model', content: [{ type: 'text', text: '...' }] }]);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         modelResponse += decoder.decode(value, { stream: true });
-        // Update the placeholder message with the streaming content
-        setMessages(prev => prev.map(msg => 
-          msg.id === modelMessageId ? { ...msg, content: modelResponse } : msg
+        setMessages(prev => prev.map(msg =>
+          msg.id === modelMessageId ? { ...msg, content: [{ type: 'text', text: modelResponse }] } : msg
         ));
       }
 
     } catch (error) {
       console.error('Failed to fetch chat response:', error);
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', content: `Error: ${errorMsg}` }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', content: [{ type: 'text', text: `Error: ${errorMsg}` }] }]);
     } finally {
       setIsLoading(false);
     }
@@ -131,7 +159,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// Create a custom hook to use the context
 export const useAppContext = () => {
   const context = useContext(AppContext);
   if (context === undefined) {

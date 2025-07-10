@@ -1,13 +1,25 @@
-import { VertexAI, Content } from '@google-cloud/vertexai';
+import { VertexAI, Content, Part } from '@google-cloud/vertexai';
 
-// Helper to map Vercel AI SDK message format to Gemini format
+// Updated helper to handle multimodal content
 const mapVercelMessagesToGemini = (messages: any[]): Content[] => {
   return messages.map(message => {
-    // The custom context uses 'model' for model responses, which matches Gemini's expectation.
     const role = message.role === 'user' ? 'user' : 'model';
+    const parts: Part[] = message.content.map((part: any) => {
+      if (part.type === 'image' && part.image?.gcsUri) {
+        return {
+          fileData: {
+            fileUri: part.image.gcsUri,
+            mimeType: part.image.mediaType,
+          },
+        };
+      } else {
+        return { text: part.text || '' };
+      }
+    });
+
     return {
       role: role,
-      parts: [{ text: message.content }],
+      parts: parts,
     };
   });
 };
@@ -28,11 +40,9 @@ class VertexAIService {
     });
   }
 
-  // This method will handle streaming responses from the model
   async getStreamingResponse(messages: any[], modelId: string, systemPrompt: string) {
     const generativeModel = this.vertexAI.getGenerativeModel({ 
       model: modelId,
-      // Add system instruction if provided
       systemInstruction: systemPrompt ? { role: 'system', parts: [{ text: systemPrompt }] } : undefined,
     });
 
@@ -40,14 +50,14 @@ class VertexAIService {
     const lastMessage = messages[messages.length - 1];
 
     const geminiHistory = mapVercelMessagesToGemini(historyMessages);
+    const lastMessageParts = mapVercelMessagesToGemini([lastMessage])[0].parts;
 
     const chat = generativeModel.startChat({
       history: geminiHistory,
     });
     
-    const streamResult = await chat.sendMessageStream(lastMessage.content);
+    const streamResult = await chat.sendMessageStream(lastMessageParts);
     
-    // Return the entire result which includes the stream and the final response promise
     return streamResult;
   }
 }

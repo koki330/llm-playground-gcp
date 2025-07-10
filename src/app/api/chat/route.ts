@@ -106,7 +106,11 @@ function toReadableStream(asyncIterator: AsyncGenerator<any>): ReadableStream {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { messages, modelId, systemPrompt } = body; // Extract systemPrompt
+    const { messages, modelId, systemPrompt } = body;
+
+    // The message content now can be an array of parts (text, image).
+    // We will pass this structure down to the service layer.
+    // The services will be responsible for transforming it into the format expected by the specific API.
     console.log(`Received request for modelId: ${modelId}`); // Add this line for logging
 
     if (!messages || !modelId) {

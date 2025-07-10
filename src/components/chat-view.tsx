@@ -35,7 +35,24 @@ const ChatView = () => {
                     : 'bg-gray-700'
                 )}
               >
-                <p>{msg.content}</p>
+                <div>
+                  {msg.content.map((part, index) => {
+                    if (part.type === 'text') {
+                      return <p key={index}>{part.text}</p>;
+                    } else if (part.type === 'image' && part.image?.previewUrl) {
+                      return (
+                        <div key={index} className="my-2">
+                          <img 
+                            src={part.image.previewUrl} 
+                            alt="User upload"
+                            className="rounded-lg max-w-xs max-h-64"
+                          />
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
               </div>
             </div>
           ))
