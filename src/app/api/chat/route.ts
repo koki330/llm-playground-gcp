@@ -71,7 +71,7 @@ async function* vertexAIStreamTransformer(stream: AsyncGenerator<any>, onComplet
   if (usageMetadata) onComplete(usageMetadata);
 }
 
-async function* openAIStreamTransformer(stream: AsyncGenerator<any>) {
+async function* openAIStreamTransformer(stream: AsyncIterable<any>) {
   const encoder = new TextEncoder();
   for await (const chunk of stream) {
     const text = chunk.choices[0]?.delta?.content;
@@ -79,7 +79,7 @@ async function* openAIStreamTransformer(stream: AsyncGenerator<any>) {
   }
 }
 
-async function* anthropicStreamTransformer(stream: AsyncGenerator<any>) {
+async function* anthropicStreamTransformer(stream: AsyncIterable<any>) {
   const encoder = new TextEncoder();
   for await (const chunk of stream) {
     if (chunk.type === 'content_block_delta') {
