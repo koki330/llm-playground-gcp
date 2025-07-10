@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 
 const storage = new Storage();
 
-async function downloadFileAsText(gcsUri: string): Promise<string> {
+async function downloadFile(gcsUri: string): Promise<Buffer> {
   const match = gcsUri.match(/^gs:\/\/([^\/]+)\/(.+)$/);
   if (!match) {
     throw new Error(`Invalid GCS URI format: ${gcsUri}`);
@@ -15,21 +15,28 @@ async function downloadFileAsText(gcsUri: string): Promise<string> {
 
   const file = storage.bucket(bucketName).file(fileName);
   const [buffer] = await file.download();
-  
-  // Assuming UTF-8 encoding for text files. 
-  // More advanced logic could be added here to detect other encodings.
-  return buffer.toString('utf-8');
+  return buffer;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { gcsUri } = await req.json();
+    const { gcsUri, contentType } = await req.json();
 
-    if (!gcsUri) {
-      return NextResponse.json({ error: 'gcsUri is required.' }, { status: 400 });
+    if (!gcsUri || !contentType) {
+      return NextResponse.json({ error: 'gcsUri and contentType are required.' }, { status: 400 });
     }
 
-    const textContent = await downloadFileAsText(gcsUri);
+    const buffer = await downloadFile(gcsUri);
+    let textContent = '';
+
+    if (contentType === 'application/json') {
+      const rawText = buffer.toString('utf-8');
+      const parsedJson = JSON.parse(rawText);
+      textContent = JSON.stringify(parsedJson, null, 2); // Pretty-print the JSON
+    } else {
+      // Default to plain text
+      textContent = buffer.toString('utf-8');
+    }
 
     return NextResponse.json({ text: textContent });
 

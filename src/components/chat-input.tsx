@@ -38,16 +38,15 @@ const ChatInput = () => {
 
         if (!uploadResponse.ok) throw new Error('Failed to upload file to GCS.');
 
-        if (file.type === 'text/plain') {
+        if (file.type === 'text/plain' || file.type === 'application/json') {
           const extractResponse = await fetch('/api/extract-text', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gcsUri }),
+            body: JSON.stringify({ gcsUri, contentType: file.type }),
           });
           if (!extractResponse.ok) throw new Error('Failed to extract text.');
           const { text } = await extractResponse.json();
           setFileContent(text);
-          // Also add to attachments to display in the input area
           setAttachments([{ name: file.name, type: file.type, gcsUri: gcsUri, previewUrl: '' }]);
         } else if (file.type.startsWith('image/')) {
           const previewUrl = URL.createObjectURL(file);
@@ -120,7 +119,7 @@ const ChatInput = () => {
           ref={fileInputRef}
           onChange={handleFileChange}
           className="hidden"
-          accept="image/png,image/jpeg,image/gif,image/webp,text/plain"
+          accept="image/png,image/jpeg,image/gif,image/webp,text/plain,application/json"
         />
         <textarea
           value={prompt}
