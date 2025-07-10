@@ -1,4 +1,3 @@
-'''
 import { NextRequest, NextResponse } from 'next/server';
 import { Storage } from '@google-cloud/storage';
 import { PDFNet } from '@pdftron/pdfnet-node';
@@ -56,4 +55,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Failed to extract text: ${errorMessage}` }, { status: 500 });
   }
 }
-'''
