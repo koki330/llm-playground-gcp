@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { messages, modelId, systemPrompt } = body; // Extract systemPrompt
+    console.log(`Received request for modelId: ${modelId}`); // Add this line for logging
 
     if (!messages || !modelId) {
       return NextResponse.json({ error: 'messages and modelId are required' }, { status: 400 });

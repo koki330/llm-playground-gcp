@@ -25,6 +25,7 @@ export const MODEL_GROUPS = [
   {
     label: "OpenAI",
     models: {
+      'GPT-4.1': 'gpt-4.1',
       'GPT-4o': 'gpt-4o',
       'GPT-4o mini': 'gpt-4o-mini',
       'GPT-3.5 Turbo': 'gpt-3.5-turbo',
