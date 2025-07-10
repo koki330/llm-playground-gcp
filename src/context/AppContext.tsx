@@ -74,6 +74,8 @@ interface AppContextType {
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
   systemPrompt: string;
   setSystemPrompt: React.Dispatch<React.SetStateAction<string>>;
+  fileContent: string;
+  setFileContent: React.Dispatch<React.SetStateAction<string>>;
   submitPrompt: (prompt: string, attachments: Attachment[]) => void;
   clearConversation: () => void;
 }
@@ -85,21 +87,38 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [selectedModel, setSelectedModel] = useState('claude-3-7-sonnet-20250219');
   const [isLoading, setIsLoading] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState('');
+  const [fileContent, setFileContent] = useState(''); // Re-add state for extracted text
 
   const clearConversation = () => {
     setMessages([]);
+    setFileContent(''); // Clear file content as well
   };
 
   const submitPrompt = async (prompt: string, attachments: Attachment[] = []) => {
     setIsLoading(true);
 
-    const content: ContentPart[] = [{ type: 'text', text: prompt }];
+    const content: ContentPart[] = [];
+
+    // Combine file content with the user's prompt if it exists
+    let combinedPrompt = prompt;
+    if (fileContent) {
+      combinedPrompt = `Extracted File Content:\n\n${fileContent}\n\n---\n\nUser Prompt:\n\n${prompt}`;
+    }
+    content.push({ type: 'text', text: combinedPrompt });
+
+    // Add image attachments if any
     if (attachments.length > 0) {
       attachments.forEach(file => {
-        content.push({
-          type: 'image',
-          image: { gcsUri: file.gcsUri, mediaType: file.type },
-        });
+        if (file.type.startsWith('image')) {
+          content.push({
+            type: 'image',
+            image: { 
+              gcsUri: file.gcsUri, 
+              mediaType: file.type, 
+              previewUrl: file.previewUrl 
+            },
+          });
+        }
       });
     }
 
@@ -111,6 +130,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const newMessages = [...messages, newUserMessage];
     setMessages(newMessages);
+    setFileContent(''); // Clear file content after sending
 
     try {
       const response = await fetch('/api/chat', {
@@ -153,7 +173,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AppContext.Provider value={{ messages, setMessages, selectedModel, setSelectedModel, isLoading, setIsLoading, systemPrompt, setSystemPrompt, submitPrompt, clearConversation }}>
+    <AppContext.Provider value={{ messages, setMessages, selectedModel, setSelectedModel, isLoading, setIsLoading, systemPrompt, setSystemPrompt, fileContent, setFileContent, submitPrompt, clearConversation }}>
       {children}
     </AppContext.Provider>
   );

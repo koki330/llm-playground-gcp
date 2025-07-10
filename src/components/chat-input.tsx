@@ -6,7 +6,8 @@ import { Paperclip, X } from 'lucide-react';
 
 const ChatInput = () => {
   const [prompt, setPrompt] = useState('');
-  const { submitPrompt, isLoading } = useAppContext();
+  // Call the hook once at the top level
+  const { submitPrompt, isLoading, fileContent, setFileContent } = useAppContext();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -15,78 +16,89 @@ const ChatInput = () => {
       const file = e.target.files[0];
       if (!file) return;
 
+      // Clear previous text content when a new file is selected
+      setFileContent('');
+      setAttachments([]);
+
       try {
-        // 1. Get signed URL from the backend
         const signedUrlResponse = await fetch('/api/generate-upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileName: file.name, contentType: file.type }),
         });
 
-        if (!signedUrlResponse.ok) {
-          throw new Error('Failed to get signed URL.');
-        }
-
+        if (!signedUrlResponse.ok) throw new Error('Failed to get signed URL.');
         const { uploadUrl, gcsUri } = await signedUrlResponse.json();
 
-        // 2. Upload file directly to GCS
         const uploadResponse = await fetch(uploadUrl, {
           method: 'PUT',
           headers: { 'Content-Type': file.type },
           body: file,
         });
 
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to upload file to GCS.');
+        if (!uploadResponse.ok) throw new Error('Failed to upload file to GCS.');
+
+        if (file.type === 'text/plain') {
+          const extractResponse = await fetch('/api/extract-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gcsUri }),
+          });
+          if (!extractResponse.ok) throw new Error('Failed to extract text.');
+          const { text } = await extractResponse.json();
+          setFileContent(text);
+          // Also add to attachments to display in the input area
+          setAttachments([{ name: file.name, type: file.type, gcsUri: gcsUri, previewUrl: '' }]);
+        } else if (file.type.startsWith('image/')) {
+          const previewUrl = URL.createObjectURL(file);
+          const newAttachment: Attachment = {
+            name: file.name,
+            type: file.type,
+            gcsUri: gcsUri,
+            previewUrl: previewUrl,
+          };
+          setAttachments([newAttachment]); // Only one attachment at a time
         }
 
-        const previewUrl = URL.createObjectURL(file);
-
-        // 3. Add file info to state for submission
-        const newAttachment: Attachment = {
-          name: file.name,
-          type: file.type,
-          gcsUri: gcsUri,
-          previewUrl: previewUrl,
-        };
-        setAttachments(prev => [...prev, newAttachment]);
-
       } catch (error) {
-        console.error('File upload error:', error);
-        // You might want to show an error to the user here
+        console.error('File processing error:', error);
       }
     }
   };
 
   const handleRemoveAttachment = (fileName: string) => {
     setAttachments(prev => {
-      const newAttachments = prev.filter(file => {
-        if (file.name === fileName) {
-          URL.revokeObjectURL(file.previewUrl); // Clean up object URL
-          return false;
+      const attachmentToRemove = prev.find(file => file.name === fileName);
+      if (attachmentToRemove) {
+        if (attachmentToRemove.type.startsWith('image/')) {
+          URL.revokeObjectURL(attachmentToRemove.previewUrl);
+        } else if (attachmentToRemove.type === 'text/plain') {
+          // If a text file is removed, clear the content from the context
+          setFileContent('');
         }
-        return true;
-      });
-      return newAttachments;
+      }
+      return prev.filter(file => file.name !== fileName);
     });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!prompt.trim() && attachments.length === 0) || isLoading) return;
+    // Use the variable from the top-level hook call
+    if ((!prompt.trim() && attachments.length === 0 && !fileContent) || isLoading) return;
     submitPrompt(prompt, attachments);
     setPrompt('');
-    // Clean up any remaining object URLs
     attachments.forEach(file => URL.revokeObjectURL(file.previewUrl));
     setAttachments([]);
+    setFileContent('');
   };
 
   return (
     <form onSubmit={handleSubmit} className="p-4 bg-gray-800 border-t border-gray-700">
+      {/* Display for attachments (both image and text files) */}
       {attachments.length > 0 && (
-        <div className="p-2 mb-2 bg-gray-700 rounded-lg">
+        <div className="p-2 mb-2 bg-gray-700 rounded-lg text-sm text-white">
           {attachments.map(file => (
-            <div key={file.name} className="flex items-center justify-between text-sm text-white bg-gray-600 px-2 py-1 rounded-md">
+            <div key={file.name} className="flex items-center justify-between">
               <span>{file.name}</span>
               <button onClick={() => handleRemoveAttachment(file.name)} className="text-gray-400 hover:text-white">
                 <X size={16} />
@@ -108,7 +120,7 @@ const ChatInput = () => {
           ref={fileInputRef}
           onChange={handleFileChange}
           className="hidden"
-          accept="image/png,image/jpeg,image/gif,image/webp"
+          accept="image/png,image/jpeg,image/gif,image/webp,text/plain"
         />
         <textarea
           value={prompt}
@@ -127,7 +139,8 @@ const ChatInput = () => {
         <button 
           type="submit"
           className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          disabled={(!prompt.trim() && attachments.length === 0) || isLoading}
+          // Use the variable from the top-level hook call
+          disabled={(!prompt.trim() && attachments.length === 0 && !fileContent) || isLoading}
         >
           {isLoading ? '...' : 'Send'}
         </button>

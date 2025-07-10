@@ -1,9 +1,10 @@
 'use client';
 
 import { useAppContext, MODEL_GROUPS } from "@/context/AppContext";
+import { X } from 'lucide-react';
 
 const Sidebar = () => {
-  const { selectedModel, setSelectedModel, isLoading, systemPrompt, setSystemPrompt } = useAppContext();
+  const { selectedModel, setSelectedModel, isLoading, systemPrompt, setSystemPrompt, fileContent, setFileContent } = useAppContext();
 
   return (
     <aside className="w-64 p-4 bg-gray-800 border-r border-gray-700 overflow-y-auto">
@@ -32,6 +33,14 @@ const Sidebar = () => {
         disabled={isLoading}
         placeholder="e.g., You are a helpful assistant."
         className="w-full p-2 rounded-lg bg-gray-700 text-white resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 h-32"
+      />
+
+      <h2 className="text-lg font-semibold mt-6 mb-4">File Content</h2>
+      <textarea
+        value={fileContent}
+        readOnly
+        placeholder="Text extracted from uploaded files will appear here..."
+        className="w-full p-2 rounded-lg bg-gray-900 text-gray-400 resize-y focus:outline-none focus:ring-1 focus:ring-gray-600 h-48"
       />
     </aside>
   );
