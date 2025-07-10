@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.56.0",
+    "@google-cloud/storage": "^7.16.0",
     "@google-cloud/vertexai": "^1.10.0",
     "clsx": "^2.1.1",
     "firebase-admin": "^13.4.0",
