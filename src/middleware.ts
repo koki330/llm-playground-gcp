@@ -9,7 +9,7 @@ export function middleware(req: NextRequest) {
 
   // Get the allowed IPs from environment variables.
   // Fallback to an empty array if the variable is not set.
-  const allowedIps = process.env.ALLOWED_IPS?.split(',') || [];
+  const allowedIps = (process.env.LLM_GCP_ALLOWED_IPS || '').split(',').map(ip => ip.trim());
 
   // Get the request's IP address.
   // We read the 'x-forwarded-for' header, which is the standard for identifying

@@ -27,11 +27,9 @@ async function downloadFile(gcsUri: string): Promise<Buffer> {
 
 // This helper function is now ONLY for PDF processing
 async function processPdfWithDocumentAI(gcsUri: string, mimeType: string): Promise<string> {
-  console.log('--- processWithDocumentAI START for PDF---');
-  const processorName = process.env.DOCAI_PROCESSOR_NAME;
+  const processorName = process.env.LLM_GCP_DOCAI_PROCESSOR_NAME;
   if (!processorName) {
-    console.error('DOCAI_PROCESSOR_NAME environment variable not set.');
-    throw new Error('DOCAI_PROCESSOR_NAME environment variable not set.');
+    throw new Error('LLM_GCP_DOCAI_PROCESSOR_NAME environment variable not set.');
   }
   console.log(`Using Document AI Processor: ${processorName}`);
 

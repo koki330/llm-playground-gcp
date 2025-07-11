@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { vertexAIService } from '@/services/vertexai';
-import { openAIService } from '@/services/openai';
-import { anthropicService } from '@/services/anthropic';
+import { getVertexAIService } from '@/services/vertexai';
+import { getOpenAIService } from '@/services/openai';
+import { getAnthropicService } from '@/services/anthropic';
 import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
 import { Message } from '@/types';
@@ -149,7 +149,8 @@ export async function POST(req: NextRequest) {
     let readableStream;
 
     if (modelId.startsWith('gemini')) {
-      const streamResult = await vertexAIService.getStreamingResponse(messages, modelId, systemPrompt || '');
+      const vertexAI = getVertexAIService();
+      const streamResult = await vertexAI.getStreamingResponse(messages, modelId, systemPrompt || '');
       const onComplete = (usage: Usage) => {
         if (modelId === GEMINI_2_5_PRO_MODEL_ID) {
           usageTracker.updateUsage(usage.promptTokenCount, usage.candidatesTokenCount).catch(console.error);
@@ -159,12 +160,14 @@ export async function POST(req: NextRequest) {
       readableStream = toReadableStream(transformedStream);
 
     } else if (modelId.startsWith('gpt') || modelId.startsWith('o1') || modelId.startsWith('o3')) {
-      const stream = await openAIService.getStreamingResponse(messages, modelId, systemPrompt || '');
+      const openAI = getOpenAIService();
+      const stream = await openAI.getStreamingResponse(messages, modelId, systemPrompt || '');
       const transformedStream = openAIStreamTransformer(stream);
       readableStream = toReadableStream(transformedStream);
 
     } else if (modelId.startsWith('claude')) {
-      const stream = await anthropicService.getStreamingResponse(messages, modelId, systemPrompt || '');
+      const anthropic = getAnthropicService();
+      const stream = await anthropic.getStreamingResponse(messages, modelId, systemPrompt || '');
       const transformedStream = anthropicStreamTransformer(stream);
       readableStream = toReadableStream(transformedStream);
 

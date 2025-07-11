@@ -3,12 +3,6 @@ import { Storage } from '@google-cloud/storage';
 import { Message } from '@/types';
 import { MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-const storage = new Storage();
-
 // Anthropicが受け入れるMIMEタイプのリスト
 const ALLOWED_ANTHROPIC_MEDIA_TYPES = [
   'image/jpeg',
@@ -25,27 +19,34 @@ function isAnthropicMediaType(mediaType: string): mediaType is AnthropicMediaTyp
   return (ALLOWED_ANTHROPIC_MEDIA_TYPES as readonly string[]).includes(mediaType);
 }
 
-async function gcsFileToBase64(gcsUri: string): Promise<string> {
+async function gcsFileToBase64(storage: Storage, gcsUri: string): Promise<string> {
   const match = gcsUri.match(/^gs:\/\/([^\/]+)\/(.+)$/);
-  if (!match) {
-    throw new Error('Invalid GCS URI');
-  }
+  if (!match) throw new Error('Invalid GCS URI');
   const bucketName = match[1];
   const fileName = match[2];
-
   const file = storage.bucket(bucketName).file(fileName);
   const [buffer] = await file.download();
   return buffer.toString('base64');
 }
 
 class AnthropicService {
+  private anthropic: Anthropic;
+  private storage: Storage;
+
+  constructor() {
+    // ★★★ constructorの中でクライアントを初期化する ★★★
+    this.anthropic = new Anthropic({
+      apiKey: process.env.LLM_GCP_ANTHROPIC_API_KEY,
+    });
+    this.storage = new Storage();
+  }
   async getStreamingResponse(messages: Message[], modelId: string, systemPrompt: string) {
     const formattedMessages: MessageParam[] = await Promise.all(
       messages.map(async ({ role, content }) => {
         const newContent: ContentBlockParam[] = [];
         for (const part of content) {
           if (part.type === 'image' && part.image?.gcsUri && isAnthropicMediaType(part.image.mediaType)) {
-            const base64Data = await gcsFileToBase64(part.image.gcsUri);
+            const base64Data = await gcsFileToBase64(this.storage, part.image.gcsUri);
             newContent.push({
               type: 'image',
               source: {
@@ -66,7 +67,7 @@ class AnthropicService {
       })
     );
 
-    const stream = await anthropic.messages.create({
+    const stream = await this.anthropic.messages.create({
       model: modelId,
       system: systemPrompt,
       messages: formattedMessages,
@@ -78,4 +79,11 @@ class AnthropicService {
   }
 }
 
-export const anthropicService = new AnthropicService();
+let anthropicServiceInstance: AnthropicService | null = null;
+
+export const getAnthropicService = (): AnthropicService => {
+  if (!anthropicServiceInstance) {
+    anthropicServiceInstance = new AnthropicService();
+  }
+  return anthropicServiceInstance;
+};

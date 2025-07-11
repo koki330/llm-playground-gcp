@@ -1,0 +1,70 @@
+# cloudbuild.yaml (最終決定版)
+
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: 
+    - 'build'
+    - '--tag'
+    # イメージ名には、Cloud Buildが自動で設定する変数を使う
+    - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}'
+    - '.'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}']
+
+# -------------------------------------------------------------
+# ステップ3: Cloud Runにデプロイする
+# -------------------------------------------------------------
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args:
+    - 'run'
+    - 'deploy'
+    - '${_SERVICE_NAME}'
+    - '--image'
+    - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}'
+    - '--region'
+    - '${_LOCATION}'
+    - '--platform'
+    - 'managed'
+    - '--allow-unauthenticated'
+    - '--port'
+    - '3000'
+  # アプリの「実行時」に必要になる全てのシークレットをここで安全に注入する
+  secretEnv: 
+    - 'LLM_GCP_ANTHROPIC_API_KEY'
+    - 'LLM_GCP_OPENAI_API_KEY'
+    - 'LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON'
+    - 'LLM_GCP_DOCAI_PROCESSOR_NAME'
+    - 'LLM_GCP_GCS_BUCKET_NAME'
+    - 'LLM_GCP_ALLOWED_IPS'
+    - 'LLM_GCP_GOOGLE_CLOUD_PROJECT_ID'
+    - 'LLM_GCP_GOOGLE_CLOUD_LOCATION'
+
+# -------------------------------------------------------------
+# Cloud Buildがアクセスできるシークレットのリスト
+# -------------------------------------------------------------
+availableSecrets:
+  secretManager:
+  - versionName: projects/${PROJECT_ID}/secrets/LLM_GCP_ANTHROPIC_API_KEY/versions/latest
+    env: 'LLM_GCP_ANTHROPIC_API_KEY'
+  - versionName: projects/${PROJECT_ID}/secrets/LLM_GCP_OPENAI_API_KEY/versions/latest
+    env: 'LLM_GCP_OPENAI_API_KEY'
+  - versionName: projects/${PROJECT_ID}/secrets/LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON/versions/latest
+    env: 'LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON'
+  - versionName: projects/${PROJECT_ID}/secrets/LLM_GCP_DOCAI_PROCESSOR_NAME/versions/latest
+    env: 'LLM_GCP_DOCAI_PROCESSOR_NAME'
+  - versionName: projects/${PROJECT_ID}/secrets/LLM_GCP_GCS_BUCKET_NAME/versions/latest
+    env: 'LLM_GCP_GCS_BUCKET_NAME'
+  - versionName: projects/${PROJECT_ID}/secrets/LLM_GCP_ALLOWED_IPS/versions/latest
+    env: 'LLM_GCP_ALLOWED_IPS'
+  - versionName: projects/${PROJECT_ID}/secrets/LLM_GCP_GOOGLE_CLOUD_PROJECT_ID/versions/latest
+    env: 'LLM_GCP_GOOGLE_CLOUD_PROJECT_ID'
+  - versionName: projects/${PROJECT_ID}/secrets/LLM_GCP_GOOGLE_CLOUD_LOCATION/versions/latest
+    env: 'LLM_GCP_GOOGLE_CLOUD_LOCATION'
+
+# -------------------------------------------------------------
+# ビルドされたイメージのリスト
+# -------------------------------------------------------------
+images:
+- '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}'

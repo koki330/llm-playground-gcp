@@ -30,11 +30,11 @@ class VertexAIService {
 
   constructor() {
     this.vertexAI = new VertexAI({
-      project: process.env.GOOGLE_CLOUD_PROJECT_ID || '',
-      location: process.env.GOOGLE_CLOUD_LOCATION || '',
+      project: process.env.LLM_GCP_GOOGLE_CLOUD_PROJECT_ID || '',
+      location: process.env.LLM_GCP_GOOGLE_CLOUD_LOCATION || '',
       googleAuthOptions: {
-        credentials: process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON
-          ? JSON.parse(process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON)
+        credentials: process.env.LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON
+          ? JSON.parse(process.env.LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON)
           : undefined,
         scopes: 'https://www.googleapis.com/auth/cloud-platform',
       }
@@ -63,4 +63,11 @@ class VertexAIService {
   }
 }
 
-export const vertexAIService = new VertexAIService();
+let vertexAIServiceInstance: VertexAIService | null = null;
+
+export const getVertexAIService = (): VertexAIService => {
+  if (!vertexAIServiceInstance) {
+    vertexAIServiceInstance = new VertexAIService();
+  }
+  return vertexAIServiceInstance;
+};
