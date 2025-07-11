@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { useAppContext } from '@/context/AppContext';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
@@ -42,10 +43,12 @@ const ChatView = () => {
                     } else if (part.type === 'image' && part.image?.previewUrl) {
                       return (
                         <div key={index} className="my-2">
-                          <img 
+                          <Image 
                             src={part.image.previewUrl} 
                             alt="User upload"
-                            className="rounded-lg max-w-xs max-h-64"
+                            width={300} // Provide appropriate dimensions
+                            height={200}
+                            className="rounded-lg"
                           />
                         </div>
                       );

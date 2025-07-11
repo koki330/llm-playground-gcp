@@ -1,10 +1,9 @@
 'use client';
 
 import { useAppContext, MODEL_GROUPS } from "@/context/AppContext";
-import { X } from 'lucide-react';
 
 const Sidebar = () => {
-  const { selectedModel, setSelectedModel, isLoading, systemPrompt, setSystemPrompt, fileContent, setFileContent } = useAppContext();
+  const { selectedModel, setSelectedModel, isLoading, systemPrompt, setSystemPrompt, fileContent } = useAppContext();
 
   return (
     <aside className="w-64 p-4 bg-gray-800 border-r border-gray-700 overflow-y-auto">

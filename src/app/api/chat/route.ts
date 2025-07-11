@@ -4,6 +4,10 @@ import { openAIService } from '@/services/openai';
 import { anthropicService } from '@/services/anthropic';
 import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
+import { Message } from '@/types';
+import { GenerateContentResponse } from '@google-cloud/vertexai';
+import { ChatCompletionChunk } from 'openai/resources/chat/completions';
+import { RawMessageStreamEvent } from '@anthropic-ai/sdk/resources/messages';
 
 const GEMINI_2_5_PRO_MODEL_ID = 'gemini-2.5-pro';
 const MONTHLY_LIMIT_USD = 300;
@@ -13,6 +17,11 @@ const PRICING = {
   INPUT: 1.25,
   OUTPUT: 10.00,
 };
+
+interface Usage {
+  promptTokenCount: number;
+  candidatesTokenCount: number;
+}
 
 // Helper to manage usage tracking in Firestore
 const usageTracker = {
@@ -60,18 +69,26 @@ const usageTracker = {
 };
 
 // Stream transformers for different AI services
-async function* vertexAIStreamTransformer(stream: AsyncGenerator<any>, onComplete: (usage: any) => void) {
+async function* vertexAIStreamTransformer(stream: AsyncGenerator<GenerateContentResponse>, onComplete: (usage: Usage) => void): AsyncGenerator<Uint8Array> {
   const encoder = new TextEncoder();
   let usageMetadata;
   for await (const chunk of stream) {
-    const text = chunk.candidates[0]?.content?.parts[0]?.text;
-    if (text) yield encoder.encode(text);
+    if (chunk.candidates && chunk.candidates.length > 0) {
+      const text = chunk.candidates[0]?.content?.parts[0]?.text;
+      if (text) yield encoder.encode(text);
+    }
     if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
   }
-  if (usageMetadata) onComplete(usageMetadata);
+  if (usageMetadata) {
+    onComplete({
+      promptTokenCount: usageMetadata.promptTokenCount || 0,
+      candidatesTokenCount: usageMetadata.candidatesTokenCount || 0,
+    });
+  }
 }
 
-async function* openAIStreamTransformer(stream: AsyncIterable<any>) {
+async function* openAIStreamTransformer(stream: AsyncIterable<ChatCompletionChunk
+>): AsyncGenerator<Uint8Array> {
   const encoder = new TextEncoder();
   for await (const chunk of stream) {
     const text = chunk.choices[0]?.delta?.content;
@@ -79,18 +96,20 @@ async function* openAIStreamTransformer(stream: AsyncIterable<any>) {
   }
 }
 
-async function* anthropicStreamTransformer(stream: AsyncIterable<any>) {
+async function* anthropicStreamTransformer(stream: AsyncIterable<
+RawMessageStreamEvent>): AsyncGenerator<Uint8Array> {
   const encoder = new TextEncoder();
   for await (const chunk of stream) {
-    if (chunk.type === 'content_block_delta') {
+    if (chunk.type === 'content_block_delta' && chunk.delta.type ===
+      'text_delta') {
       const text = chunk.delta.text;
       if (text) yield encoder.encode(text);
     }
   }
 }
 
-function toReadableStream(asyncIterator: AsyncGenerator<any>): ReadableStream {
-  let iterator = asyncIterator;
+function toReadableStream(asyncIterator: AsyncGenerator<Uint8Array>): ReadableStream {
+  const iterator = asyncIterator;
   return new ReadableStream({
     async pull(controller) {
       const { value, done } = await iterator.next();
@@ -103,15 +122,18 @@ function toReadableStream(asyncIterator: AsyncGenerator<any>): ReadableStream {
   });
 }
 
+interface RequestBody {
+  messages: Message[];
+  modelId: string;
+  systemPrompt?: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body: RequestBody = await req.json();
     const { messages, modelId, systemPrompt } = body;
 
-    // The message content now can be an array of parts (text, image).
-    // We will pass this structure down to the service layer.
-    // The services will be responsible for transforming it into the format expected by the specific API.
-    console.log(`Received request for modelId: ${modelId}`); // Add this line for logging
+    console.log(`Received request for modelId: ${modelId}`);
 
     if (!messages || !modelId) {
       return NextResponse.json({ error: 'messages and modelId are required' }, { status: 400 });
@@ -127,8 +149,8 @@ export async function POST(req: NextRequest) {
     let readableStream;
 
     if (modelId.startsWith('gemini')) {
-      const streamResult = await vertexAIService.getStreamingResponse(messages, modelId, systemPrompt);
-      const onComplete = (usage: any) => {
+      const streamResult = await vertexAIService.getStreamingResponse(messages, modelId, systemPrompt || '');
+      const onComplete = (usage: Usage) => {
         if (modelId === GEMINI_2_5_PRO_MODEL_ID) {
           usageTracker.updateUsage(usage.promptTokenCount, usage.candidatesTokenCount).catch(console.error);
         }
@@ -137,12 +159,12 @@ export async function POST(req: NextRequest) {
       readableStream = toReadableStream(transformedStream);
 
     } else if (modelId.startsWith('gpt') || modelId.startsWith('o1') || modelId.startsWith('o3')) {
-      const stream = await openAIService.getStreamingResponse(messages, modelId, systemPrompt);
+      const stream = await openAIService.getStreamingResponse(messages, modelId, systemPrompt || '');
       const transformedStream = openAIStreamTransformer(stream);
       readableStream = toReadableStream(transformedStream);
 
     } else if (modelId.startsWith('claude')) {
-      const stream = await anthropicService.getStreamingResponse(messages, modelId, systemPrompt);
+      const stream = await anthropicService.getStreamingResponse(messages, modelId, systemPrompt || '');
       const transformedStream = anthropicStreamTransformer(stream);
       readableStream = toReadableStream(transformedStream);
 

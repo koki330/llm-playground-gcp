@@ -1,10 +1,11 @@
 import { VertexAI, Content, Part } from '@google-cloud/vertexai';
+import { Message } from '@/types';
 
 // Updated helper to handle multimodal content
-const mapVercelMessagesToGemini = (messages: any[]): Content[] => {
+const mapVercelMessagesToGemini = (messages: Message[]): Content[] => {
   return messages.map(message => {
     const role = message.role === 'user' ? 'user' : 'model';
-    const parts: Part[] = message.content.map((part: any) => {
+    const parts: Part[] = message.content.map((part) => {
       if (part.type === 'image' && part.image?.gcsUri) {
         return {
           fileData: {
@@ -40,7 +41,7 @@ class VertexAIService {
     });
   }
 
-  async getStreamingResponse(messages: any[], modelId: string, systemPrompt: string) {
+  async getStreamingResponse(messages: Message[], modelId: string, systemPrompt: string) {
     const generativeModel = this.vertexAI.getGenerativeModel({ 
       model: modelId,
       systemInstruction: systemPrompt ? { role: 'system', parts: [{ text: systemPrompt }] } : undefined,
