@@ -38,13 +38,24 @@ const ChatInput = () => {
 
         if (!uploadResponse.ok) throw new Error('Failed to upload file to GCS.');
 
-        if (file.type === 'text/plain' || file.type === 'application/json') {
+        const isTextOrJson = file.type === 'text/plain' || file.type === 'application/json';
+        const isDocument = [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ].includes(file.type);
+
+        if (isTextOrJson || isDocument) {
+          setFileContent('Extracting text...'); // Show loading state
           const extractResponse = await fetch('/api/extract-text', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ gcsUri, contentType: file.type }),
           });
-          if (!extractResponse.ok) throw new Error('Failed to extract text.');
+          if (!extractResponse.ok) {
+            const errorData = await extractResponse.json();
+            throw new Error(errorData.error || 'Failed to extract text.');
+          }
           const { text } = await extractResponse.json();
           setFileContent(text);
           setAttachments([{ name: file.name, type: file.type, gcsUri: gcsUri, previewUrl: '' }]);
@@ -119,7 +130,7 @@ const ChatInput = () => {
           ref={fileInputRef}
           onChange={handleFileChange}
           className="hidden"
-          accept="image/png,image/jpeg,image/gif,image/webp,text/plain,application/json"
+          accept="image/png,image/jpeg,image/gif,image/webp,text/plain,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         />
         <textarea
           value={prompt}
