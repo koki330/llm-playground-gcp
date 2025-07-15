@@ -41,4 +41,5 @@ tecnos-cbp-c9654fd61d4b.json
 *.tsbuildinfo
 next-env.d.ts
 
-server.log
+server.logcors-config.json 
+cors-config.template.json
