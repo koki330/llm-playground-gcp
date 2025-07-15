@@ -1,14 +1,17 @@
-# cloudbuild.yaml (最終決定版)
-
 steps:
+# -------------------------------------------------------------
+# ステップ1: コンテナイメージをビルドする
+# -------------------------------------------------------------
 - name: 'gcr.io/cloud-builders/docker'
   args: 
     - 'build'
     - '--tag'
-    # イメージ名には、Cloud Buildが自動で設定する変数を使う
     - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}'
     - '.'
 
+# -------------------------------------------------------------
+# ステップ2: イメージをArtifact Registryにプッシュする
+# -------------------------------------------------------------
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}']
 
@@ -25,12 +28,15 @@ steps:
     - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${BUILD_ID}'
     - '--region'
     - '${_LOCATION}'
+    - '--service-account'
+    - 'llmplayground@tecnos-cbp.iam.gserviceaccount.com'
     - '--platform'
     - 'managed'
     - '--allow-unauthenticated'
     - '--port'
     - '3000'
-  # アプリの「実行時」に必要になる全てのシークレットをここで安全に注入する
+    - '--set-secrets=LLM_GCP_ANTHROPIC_API_KEY=LLM_GCP_ANTHROPIC_API_KEY:latest,LLM_GCP_OPENAI_API_KEY=LLM_GCP_OPENAI_API_KEY:latest,LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON=LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON:latest,LLM_GCP_DOCAI_PROCESSOR_NAME=LLM_GCP_DOCAI_PROCESSOR_NAME:latest,LLM_GCP_GCS_BUCKET_NAME=LLM_GCP_GCS_BUCKET_NAME:latest,LLM_GCP_ALLOWED_IPS=LLM_GCP_ALLOWED_IPS:latest,LLM_GCP_GOOGLE_CLOUD_PROJECT_ID=LLM_GCP_GOOGLE_CLOUD_PROJECT_ID:latest,LLM_GCP_GOOGLE_CLOUD_LOCATION=LLM_GCP_GOOGLE_CLOUD_LOCATION:latest'
+  
   secretEnv: 
     - 'LLM_GCP_ANTHROPIC_API_KEY'
     - 'LLM_GCP_OPENAI_API_KEY'
@@ -40,9 +46,10 @@ steps:
     - 'LLM_GCP_ALLOWED_IPS'
     - 'LLM_GCP_GOOGLE_CLOUD_PROJECT_ID'
     - 'LLM_GCP_GOOGLE_CLOUD_LOCATION'
-
+  
 # -------------------------------------------------------------
 # Cloud Buildがアクセスできるシークレットのリスト
+# (このセクションは、--set-secrets を実行する権限を得るために必要です)
 # -------------------------------------------------------------
 availableSecrets:
   secretManager:
