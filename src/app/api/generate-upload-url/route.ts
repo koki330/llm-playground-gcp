@@ -8,10 +8,13 @@ const storage = new Storage({
 });
 
 // Get the bucket name from an environment variable
-const bucketName = process.env.GCS_BUCKET_NAME;
+const bucketName = process.env.LLM_GCP_GCS_BUCKET_NAME;
+console.log(`[DEBUG] generate-upload-url: Initializing. Bucket name from env is: "${bucketName}"`);
 
 export async function POST(req: Request) {
+  console.log(`[DEBUG] generate-upload-url: POST request received. Bucket name is: "${bucketName}"`);
   if (!bucketName) {
+    console.error('[ERROR] generate-upload-url: GCS_BUCKET_NAME is not set or empty. Failing request.');
     return NextResponse.json({ error: 'GCS_BUCKET_NAME environment variable not set.' }, { status: 500 });
   }
 
