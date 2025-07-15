@@ -2,48 +2,53 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(req: NextRequest) {
-  // In development, skip the IP check entirely
+  // 開発環境では何もしない
   if (process.env.NODE_ENV === 'development') {
     return NextResponse.next();
   }
 
-  // Get the allowed IPs from environment variables.
-  // Fallback to an empty array if the variable is not set.
-  const allowedIps = (process.env.LLM_GCP_ALLOWED_IPS || '').split(',').map(ip => ip.trim());
+  // --- ▼▼▼ デバッグログ ▼▼▼ ---
+  console.log('--- [Middleware Intercept] ---');
+  console.log(`Pathname: ${req.nextUrl.pathname}`);
 
-  // Get the request's IP address.
-  // We read the 'x-forwarded-for' header, which is the standard for identifying
-  // the originating IP address of a client connecting through a proxy server.
-  const forwardedFor = req.headers.get('x-forwarded-for');
-  // The header can contain a comma-separated list of IPs. The first one is the client's.
-  const requestIp = forwardedFor ? forwardedFor.split(',')[0].trim() : undefined;
+  // 1. クライアントIPの特定 (より堅牢な方法)
+  // Cloud Runでは 'x-forwarded-for' ヘッダーが最も信頼性が高い
+  const xForwardedFor = req.headers.get('x-forwarded-for');
+  
+  // 'x-forwarded-for' は "client, proxy1, proxy2" の形式なので、最初のIPを取得
+  const clientIp = xForwardedFor ? xForwardedFor.split(',')[0].trim() : null;
 
-  // If the IP is not available or not in the allowed list, deny access.
-  if (!requestIp || !allowedIps.includes(requestIp)) {
-    console.warn(`Forbidden: IP address ${requestIp} is not in the allowed list.`);
-    // Return a simple HTML response for forbidden access.
-    return new NextResponse('<h1>403 Forbidden</h1><p>You are not authorized to access this page.</p>', {
-      status: 403,
-      headers: { 'Content-Type': 'text/html' },
-    });
+  console.log(`- Raw 'x-forwarded-for' header: [${xForwardedFor}]`);
+  console.log(`===> Final Detected Client IP: [${clientIp}]`);
+
+  // 2. 許可IPリストの読み込み
+  const allowedIpsEnv = process.env.LLM_GCP_ALLOWED_IPS;
+  console.log(`- Raw 'LLM_GCP_ALLOWED_IPS' env var: [${allowedIpsEnv}]`);
+
+  // 3. 許可IPリストの生成
+  const allowedIps = (allowedIpsEnv || '').split(',').map(ip => ip.trim()).filter(ip => ip);
+  console.log(`- Parsed Allowed IP List: [${allowedIps.join(', ')}]`);
+
+  // 4. 判定
+  const isAllowed = clientIp && allowedIps.length > 0 && allowedIps.includes(clientIp);
+  console.log(`===> Final Check: Is [${clientIp}] included in [${allowedIps.join(', ')}]?  >>> ${isAllowed ? 'YES (Access Granted)' : 'NO (Access Denied)'}`);
+  console.log('------------------------------------');
+  // --- ▲▲▲ デバッグログここまで ▲▲▲ ---
+
+  if (isAllowed) {
+    return NextResponse.next();
   }
 
-  // If the IP is in the allowed list, proceed with the request.
-  return NextResponse.next();
+  // アクセス拒否
+  return new NextResponse('<h1>403 Forbidden</h1><p>You are not authorized to access this page.</p>', {
+    status: 403,
+    headers: { 'Content-Type': 'text/html' },
+  });
 }
 
-// Configure the middleware to run on all paths except for specific ones.
+// configは変更なし
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes, which have their own logic)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     *
-     * This prevents the middleware from interfering with static assets and API calls.
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };
