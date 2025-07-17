@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useChat, Message } from 'ai/react';
 
+// --- Type Definitions ---
 export interface Attachment {
   name: string;
   type: string;
@@ -10,11 +11,24 @@ export interface Attachment {
   previewUrl: string;
 }
 
+export type ReasoningPreset = 'low' | 'middle' | 'high';
+export type TemperaturePreset = 'precise' | 'balanced' | 'creative';
+
+export const MODEL_CONFIG: { [key: string]: { type: 'reasoning' | 'normal', maxTokens: number } } = {
+  'claude-sonnet4': { type: 'normal', maxTokens: 64000 },
+  'gpt-4.1': { type: 'normal', maxTokens: 32768 },
+  'gpt-4.1-mini': { type: 'normal', maxTokens: 32768 },
+  'gpt-4.1-nano': { type: 'normal', maxTokens: 32768 },
+  'o3': { type: 'reasoning', maxTokens: 100000 },
+  'o4-mini': { type: 'reasoning', maxTokens: 100000 },
+  'gemini-2.5-pro': { type: 'normal', maxTokens: 65536 },
+  'gemini-2.5-flash': { type: 'normal', maxTokens: 65536 },
+};
+
 export const MODEL_GROUPS = [
   {
     label: "Anthropic",
     models: {
-      // 'Claude 4 Opus': 'claude4-opus',
       'Claude Sonnet 4': 'claude-sonnet4',
     }
   },
@@ -60,6 +74,13 @@ interface AppContextType {
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
   usageInfo: UsageInfo | null;
+  temperaturePreset: TemperaturePreset;
+  setTemperaturePreset: React.Dispatch<React.SetStateAction<TemperaturePreset>>;
+  maxTokens: number;
+  setMaxTokens: React.Dispatch<React.SetStateAction<number>>;
+  reasoningPreset: ReasoningPreset;
+  setReasoningPreset: React.Dispatch<React.SetStateAction<ReasoningPreset>>;
+  currentModelConfig: { type: 'reasoning' | 'normal', maxTokens: number } | undefined;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -71,14 +92,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isFileProcessing, setIsFileProcessing] = useState(false);
   const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
 
+  // New model settings states
+  const [temperaturePreset, setTemperaturePreset] = useState<TemperaturePreset>('balanced');
+  const [maxTokens, setMaxTokens] = useState(4096);
+  const [reasoningPreset, setReasoningPreset] = useState<ReasoningPreset>('middle');
+
+  const currentModelConfig = MODEL_CONFIG[selectedModel];
+
   const { messages, append, isLoading, input, setInput, setMessages } = useChat({
     api: '/api/chat',
     body: {
       modelId: selectedModel,
       systemPrompt: systemPrompt,
+      // Pass settings to the backend
+      temperaturePreset: currentModelConfig?.type === 'normal' ? temperaturePreset : undefined,
+      maxTokens: currentModelConfig?.type === 'normal' ? maxTokens : undefined,
+      reasoningPreset: currentModelConfig?.type === 'reasoning' ? reasoningPreset : undefined,
     },
     onFinish: () => {
-      // Refetch usage info after a conversation is finished
       fetchUsage(selectedModel);
     }
   });
@@ -111,6 +142,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (selectedModel) {
       fetchUsage(selectedModel);
+      // Update maxTokens based on the selected model's config
+      const newMax = MODEL_CONFIG[selectedModel]?.maxTokens;
+      if (newMax) {
+        setMaxTokens(newMax);
+      }
     }
   }, [selectedModel]);
 
@@ -124,17 +160,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const submitPrompt = async (prompt: string) => {
-    if (usageInfo?.isLimited) {
-      // Prevent submission if the model limit is reached
-      return;
-    }
+    if (usageInfo?.isLimited) return;
     let combinedPrompt = prompt;
     if (fileContent) {
       combinedPrompt = `The user has uploaded a file. Its content is:\n\n${fileContent}\n\n---\n\nUser prompt:\n\n${prompt}`;
     }
-
     await append({ role: 'user', content: combinedPrompt });
-
     setInput('');
     setFileContent('');
   };
@@ -156,6 +187,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         input,
         handleInputChange,
         usageInfo,
+        temperaturePreset,
+        setTemperaturePreset,
+        maxTokens,
+        setMaxTokens,
+        reasoningPreset,
+        setReasoningPreset,
+        currentModelConfig,
     }}>
       {children}
     </AppContext.Provider>

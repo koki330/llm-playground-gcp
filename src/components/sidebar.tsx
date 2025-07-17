@@ -1,22 +1,108 @@
 'use client';
 
-import { useAppContext, MODEL_GROUPS } from "@/context/AppContext";
-import { FileText } from 'lucide-react';
+import { useAppContext, MODEL_GROUPS, ReasoningPreset, TemperaturePreset } from "@/context/AppContext";
+import { FileText, SlidersHorizontal, BrainCircuit } from 'lucide-react';
 
 const supportedFiles = [
   'PDF', 'PNG', 'DOCX', 'XLSX', 'TXT', 'JSON'
 ];
 
 const Sidebar = () => {
-  const { 
+  const {
     selectedModel, 
     setSelectedModel, 
     isLoading, 
     systemPrompt, 
     setSystemPrompt, 
     fileContent,
-    usageInfo 
+    usageInfo,
+    temperaturePreset,
+    setTemperaturePreset,
+    maxTokens,
+    setMaxTokens,
+    reasoningPreset,
+    setReasoningPreset,
+    currentModelConfig,
   } = useAppContext();
+
+  const handleMaxTokensChange = (value: string) => {
+    const num = parseInt(value, 10);
+    if (isNaN(num)) {
+      setMaxTokens(0); // Set to 0 or a min value if input is invalid
+    } else if (currentModelConfig && num > currentModelConfig.maxTokens) {
+      setMaxTokens(currentModelConfig.maxTokens); // Cap at the model's max
+    } else {
+      setMaxTokens(num);
+    }
+  };
+
+  const renderModelSettings = () => {
+    if (!currentModelConfig) return null;
+
+    if (currentModelConfig.type === 'normal') {
+      return (
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="temperaturePreset" className="block text-sm font-medium text-gray-300">回答のスタイル</label>
+            <select
+              id="temperaturePreset"
+              value={temperaturePreset}
+              onChange={(e) => setTemperaturePreset(e.target.value as TemperaturePreset)}
+              className="w-full p-2 mt-1 bg-gray-700 rounded-md"
+              disabled={isLoading}
+            >
+              <option value="precise">堅実</option>
+              <option value="balanced">標準</option>
+              <option value="creative">創造的</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="maxTokens" className="block text-sm font-medium text-gray-300">最大トークン: {maxTokens}</label>
+            <input
+              id="maxTokensRange"
+              type="range"
+              min="0"
+              max={currentModelConfig.maxTokens}
+              step="128"
+              value={maxTokens}
+              onChange={(e) => handleMaxTokensChange(e.target.value)}
+              className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer mt-1"
+              disabled={isLoading}
+            />
+             <input
+              id="maxTokensNumber"
+              type="number"
+              value={maxTokens}
+              onChange={(e) => handleMaxTokensChange(e.target.value)}
+              className="w-full p-2 mt-2 bg-gray-700 rounded-md"
+              disabled={isLoading}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (currentModelConfig.type === 'reasoning') {
+      return (
+        <div>
+          <label htmlFor="reasoningPreset" className="block text-sm font-medium text-gray-300">リーゾニング精度</label>
+          <select
+            id="reasoningPreset"
+            value={reasoningPreset}
+            onChange={(e) => setReasoningPreset(e.target.value as ReasoningPreset)}
+            className="w-full p-2 mt-1 bg-gray-700 rounded-md"
+            disabled={isLoading}
+          >
+            <option value="low">Low</option>
+            <option value="middle">Middle</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <aside className="w-64 p-4 bg-gray-800 border-r border-gray-700 overflow-y-auto">
@@ -42,6 +128,14 @@ const Sidebar = () => {
           {usageInfo.usageWarning}
         </div>
       )}
+
+      <div className="mt-4 pt-4 border-t border-gray-700/50">
+        <h3 className="flex items-center gap-2 text-md font-semibold mb-3 text-gray-300">
+          {currentModelConfig?.type === 'reasoning' ? <BrainCircuit size={18} /> : <SlidersHorizontal size={18} />}
+          Model Settings
+        </h3>
+        {renderModelSettings()}
+      </div>
 
       <div className="mt-4 pt-4 border-t border-gray-700/50">
         <h3 className="flex items-center gap-2 text-md font-semibold mb-2 text-gray-300">

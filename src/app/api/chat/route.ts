@@ -8,11 +8,13 @@ import { FieldValue } from '@google-cloud/firestore';
 import { getPricing } from '@/config/pricing';
 import { get_encoding } from 'tiktoken';
 
-// The request body now only contains the final, combined conversation history.
 interface ChatRequestBody {
   messages: CoreMessage[];
   modelId: string;
   systemPrompt?: string;
+  temperaturePreset?: 'precise' | 'balanced' | 'creative';
+  maxTokens?: number;
+  reasoningPreset?: 'low' | 'middle' | 'high';
 }
 
 const MONTHLY_LIMITS_USD: { [key: string]: number } = {
@@ -20,10 +22,20 @@ const MONTHLY_LIMITS_USD: { [key: string]: number } = {
   'o3': 300,
 };
 
-// Initialize the tokenizer for OpenAI models
+const TEMP_PRESET_MAP: { [key: string]: number } = {
+  precise: 0.2,
+  balanced: 0.6,
+  creative: 1.0,
+};
+
+const REASONING_PRESET_TO_TEMP: { [key: string]: number } = {
+  low: 0.1,
+  middle: 0.5,
+  high: 1.0,
+};
+
 const enc = get_encoding('cl100k_base');
 
-// Usage tracking logic remains the same.
 const usageTracker = {
     getDocRef: (modelId: string) => firestore.collection('usage_tracking').doc(modelId),
     getUsage: async (modelId: string) => {
@@ -75,7 +87,7 @@ const usageTracker = {
 export async function POST(req: NextRequest) {
   try {
     const body: ChatRequestBody = await req.json();
-    const { messages, modelId, systemPrompt } = body;
+    const { messages, modelId, systemPrompt, temperaturePreset, maxTokens, reasoningPreset } = body;
 
     if (!messages || !modelId) {
       return NextResponse.json({ error: 'messages and modelId are required' }, { status: 400 });
@@ -85,85 +97,56 @@ export async function POST(req: NextRequest) {
     if (limit) {
       const usage = await usageTracker.getUsage(modelId);
       if (usage.total_cost >= limit) {
-        return NextResponse.json({ error: `Monthly usage limit of ${limit} for ${modelId} has been reached.` }, { status: 429 });
+        return NextResponse.json({ error: `Monthly usage limit of $${limit} for ${modelId} has been reached.` }, { status: 429 });
       }
     }
 
-    const onFinishCallback = async (result: {
-        usage?: { promptTokens: number; completionTokens: number };
-        text?: string;
-        [key: string]: unknown;
-    }) => {
+    const onFinishCallback = async (result: { usage?: { promptTokens: number; completionTokens: number }; text?: string; [key: string]: unknown; }) => {
         try {
             let promptTokens = 0;
             let completionTokens = 0;
-
             if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
-                // Manual token calculation for OpenAI
-                const inputText = messages
-                    .map(m => Array.isArray(m.content) 
-                        ? m.content.filter(c => c.type === 'text').map(c => c.text).join('\n') 
-                        : m.content)
-                    .join('\n');
+                const inputText = messages.map(m => Array.isArray(m.content) ? m.content.filter(c => c.type === 'text').map(c => c.text).join('\n') : m.content).join('\n');
                 promptTokens = enc.encode(inputText).length;
                 completionTokens = result.text ? enc.encode(result.text).length : 0;
-                console.log(`[DEBUG] Manual OpenAI token count: Input=${promptTokens}, Output=${completionTokens}`);
             } else {
-                // Standard Vercel AI SDK usage for other providers
                 const usage = result.usage;
-                if (!usage) {
-                    console.error(`[ERROR] 'usage' object is missing in onFinish callback for ${modelId}.`);
-                    return;
-                }
+                if (!usage) return;
                 promptTokens = usage.promptTokens;
                 completionTokens = usage.completionTokens;
             }
-
             await usageTracker.updateUsage(modelId, promptTokens, completionTokens);
         } catch (error) {
             console.error(`[FATAL ERROR] An unexpected error occurred inside onFinish for ${modelId}:`, error);
         }
     };
 
-    const onErrorCallback = ({ error }: { error: unknown }) => {
-        console.error(`[STREAM_ERROR] An error occurred during the stream for model ${modelId}:`, error);
+    let finalTemperature;
+    if (reasoningPreset) {
+      finalTemperature = REASONING_PRESET_TO_TEMP[reasoningPreset];
+    } else if (temperaturePreset) {
+      finalTemperature = TEMP_PRESET_MAP[temperaturePreset];
+    }
+
+    const streamTextConfig = {
+      messages: messages,
+      system: systemPrompt,
+      temperature: finalTemperature,
+      maxTokens: maxTokens,
+      onFinish: onFinishCallback,
     };
 
     if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
-        const result = await streamText({
-            model: getOpenAIProvider()(modelId),
-            messages: messages,
-            system: systemPrompt,
-            onFinish: onFinishCallback,
-            onError: onErrorCallback,
-        });
+        const result = await streamText({ ...streamTextConfig, model: getOpenAIProvider()(modelId) });
         return result.toDataStreamResponse();
-
     } else if (modelId.startsWith('claude')) {
-        const claudeModelMap: { [key: string]: string } = {
-            // 'claude4-opus': 'claude-opus-4-20250514',
-            'claude-sonnet4': 'claude-sonnet-4-20250514'
-        };
+        const claudeModelMap: { [key: string]: string } = { 'claude-sonnet4': 'claude-sonnet-4-20250514' };
         const anthropicModelId = claudeModelMap[modelId] || modelId;
-        const result = await streamText({
-            model: getAnthropicProvider()(anthropicModelId),
-            messages: messages,
-            system: systemPrompt || 'You are a helpful assistant.',
-            onFinish: onFinishCallback,
-            onError: onErrorCallback,
-        });
+        const result = await streamText({ ...streamTextConfig, model: getAnthropicProvider()(anthropicModelId), system: systemPrompt || 'You are a helpful assistant.' });
         return result.toDataStreamResponse();
-
     } else if (modelId.startsWith('gemini')) {
-        const result = await streamText({
-            model: getGoogleProvider()(modelId),
-            messages: messages,
-            system: systemPrompt,
-            onFinish: onFinishCallback,
-            onError: onErrorCallback,
-        });
+        const result = await streamText({ ...streamTextConfig, model: getGoogleProvider()(modelId) });
         return result.toDataStreamResponse();
-
     } else {
       return NextResponse.json({ error: `Model ${modelId} not supported yet.` }, { status: 400 });
     }
