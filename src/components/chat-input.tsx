@@ -3,6 +3,7 @@
 import { useState, useRef, FormEvent } from 'react';
 import { useAppContext, Attachment } from '@/context/AppContext';
 import { Paperclip, X } from 'lucide-react';
+import Textarea from 'react-textarea-autosize';
 
 const ChatInput = () => {
   const { 
@@ -108,11 +109,11 @@ const ChatInput = () => {
           ))}
         </div>
       )}
-      <div className="relative flex items-center">
+      <div className="relative flex items-start">
         <button 
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="p-2 rounded-full hover:bg-gray-700 text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="p-2 mt-2 rounded-full hover:bg-gray-700 text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           disabled={isLoading || isFileProcessing}
         >
           <Paperclip size={20} />
@@ -124,7 +125,7 @@ const ChatInput = () => {
           className="hidden"
           accept="image/png,image/jpeg,image/gif,image/webp,text/plain,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         />
-        <textarea
+        <Textarea
           value={input}
           onChange={handleInputChange}
           onKeyDown={(e) => {
@@ -134,7 +135,8 @@ const ChatInput = () => {
           }}
           placeholder="Message a model, or add a file..."
           className="flex-grow p-2 pr-20 rounded-lg bg-gray-700 text-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          rows={1}
+          minRows={2}
+          maxRows={20}
           disabled={isLoading || isFileProcessing}
         />
         <button 
