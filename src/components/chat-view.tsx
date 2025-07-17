@@ -4,6 +4,9 @@ import { useEffect, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 const ChatView = () => {
   const { messages } = useAppContext();
@@ -29,14 +32,36 @@ const ChatView = () => {
             >
               <div
                 className={cn(
-                  'p-3 rounded-lg max-w-xl whitespace-pre-wrap',
+                  'p-3 rounded-lg max-w-xl',
                   msg.role === 'user'
                     ? 'bg-blue-600'
-                    : 'bg-gray-700'
+                    : 'bg-gray-700',
+                  'prose prose-invert max-w-none'
                 )}
               >
-                {/* The content from useChat is a simple string */}
-                <p>{msg.content}</p>
+                <ReactMarkdown
+                  components={{
+                    code({ node, className, children, ...props }) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      return match ? (
+                        <SyntaxHighlighter
+                          style={vscDarkPlus}
+                          language={match[1]}
+                          PreTag="div"
+                          {...props}
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
+                      ) : (
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
               </div>
             </div>
           ))
