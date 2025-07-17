@@ -1,6 +1,11 @@
 'use client';
 
 import { useAppContext, MODEL_GROUPS } from "@/context/AppContext";
+import { FileText } from 'lucide-react';
+
+const supportedFiles = [
+  'PDF', 'PNG', 'DOCX', 'XLSX', 'TXT', 'JSON'
+];
 
 const Sidebar = () => {
   const { 
@@ -37,6 +42,20 @@ const Sidebar = () => {
           {usageInfo.usageWarning}
         </div>
       )}
+
+      <div className="mt-4 pt-4 border-t border-gray-700/50">
+        <h3 className="flex items-center gap-2 text-md font-semibold mb-2 text-gray-300">
+          <FileText size={18} />
+          対応ファイル
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {supportedFiles.map(format => (
+            <span key={format} className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded-md">
+              {format}
+            </span>
+          ))}
+        </div>
+      </div>
 
       <h2 className="text-lg font-semibold mt-6 mb-4">System Prompt</h2>
       <textarea
