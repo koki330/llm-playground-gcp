@@ -1,73 +1,16 @@
-import { VertexAI, Content, Part } from '@google-cloud/vertexai';
-import { Message } from '@/types';
+import { createVertex, GoogleVertexProvider } from '@ai-sdk/google-vertex';
 
-// Updated helper to handle multimodal content
-const mapVercelMessagesToGemini = (messages: Message[]): Content[] => {
-  return messages.map(message => {
-    const role = message.role === 'user' ? 'user' : 'model';
-    const parts: Part[] = message.content.map((part) => {
-      if (part.type === 'image' && part.image?.gcsUri) {
-        return {
-          fileData: {
-            fileUri: part.image.gcsUri,
-            mimeType: part.image.mediaType,
-          },
-        };
-      } else {
-        return { text: part.text || '' };
-      }
+/**
+ * Lazily creates and returns the Google Vertex AI provider.
+ * This provider correctly uses service account credentials (ADC) instead of an API key.
+ */
+export function getGoogleProvider(): GoogleVertexProvider {
+    // This function will automatically use the service account specified
+    // by the LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON env var in local development,
+    // and the attached service account in Cloud Run.
+    // It requires the project and location to be explicitly set.
+    return createVertex({
+        project: process.env.LLM_GCP_GOOGLE_CLOUD_PROJECT_ID,
+        location: process.env.LLM_GCP_GOOGLE_CLOUD_LOCATION,
     });
-
-    return {
-      role: role,
-      parts: parts,
-    };
-  });
-};
-
-class VertexAIService {
-  private vertexAI: VertexAI;
-
-  constructor() {
-    this.vertexAI = new VertexAI({
-      project: process.env.LLM_GCP_GOOGLE_CLOUD_PROJECT_ID || '',
-      location: process.env.LLM_GCP_GOOGLE_CLOUD_LOCATION || '',
-      googleAuthOptions: {
-        credentials: process.env.LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON
-          ? JSON.parse(process.env.LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON)
-          : undefined,
-        scopes: 'https://www.googleapis.com/auth/cloud-platform',
-      }
-    });
-  }
-
-  async getStreamingResponse(messages: Message[], modelId: string, systemPrompt: string) {
-    const generativeModel = this.vertexAI.getGenerativeModel({ 
-      model: modelId,
-      systemInstruction: systemPrompt ? { role: 'system', parts: [{ text: systemPrompt }] } : undefined,
-    });
-
-    const historyMessages = messages.slice(0, -1);
-    const lastMessage = messages[messages.length - 1];
-
-    const geminiHistory = mapVercelMessagesToGemini(historyMessages);
-    const lastMessageParts = mapVercelMessagesToGemini([lastMessage])[0].parts;
-
-    const chat = generativeModel.startChat({
-      history: geminiHistory,
-    });
-    
-    const streamResult = await chat.sendMessageStream(lastMessageParts);
-    
-    return streamResult;
-  }
 }
-
-let vertexAIServiceInstance: VertexAIService | null = null;
-
-export const getVertexAIService = (): VertexAIService => {
-  if (!vertexAIServiceInstance) {
-    vertexAIServiceInstance = new VertexAIService();
-  }
-  return vertexAIServiceInstance;
-};

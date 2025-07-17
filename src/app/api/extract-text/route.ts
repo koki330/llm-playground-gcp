@@ -1,125 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Storage } from '@google-cloud/storage';
-import { DocumentProcessorServiceClient } from '@google-cloud/documentai';
+import { processDocument } from '@/services/documentAiService';
 import mammoth from 'mammoth';
 import * as xlsx from 'xlsx';
 
-export const runtime = 'nodejs';
+const serviceAccountJson = process.env.LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON;
+const credentials = serviceAccountJson ? JSON.parse(serviceAccountJson) : undefined;
 
-const storage = new Storage();
-const docAIClient = new DocumentProcessorServiceClient();
+const storage = new Storage({
+  credentials,
+});
 
-// Helper function to download a file from GCS into a buffer
-async function downloadFile(gcsUri: string): Promise<Buffer> {
-  console.log(`--- downloadFile START for ${gcsUri} ---`);
-  const match = gcsUri.match(/^gs:\/\/([^\/]+)\/([^\/]+)$/);
-  if (!match) {
-    throw new Error(`Invalid GCS URI format: ${gcsUri}`);
-  }
-  const bucketName = match[1];
-  const fileName = match[2];
-
-  const file = storage.bucket(bucketName).file(fileName);
-  const [buffer] = await file.download();
-  console.log(`--- downloadFile END for ${gcsUri} ---`);
-  return buffer;
-}
-
-// This helper function is now ONLY for PDF processing
-async function processPdfWithDocumentAI(gcsUri: string, mimeType: string): Promise<string> {
-  const processorName = process.env.LLM_GCP_DOCAI_PROCESSOR_NAME;
-  if (!processorName) {
-    throw new Error('LLM_GCP_DOCAI_PROCESSOR_NAME environment variable not set.');
-  }
-  console.log(`Using Document AI Processor: ${processorName}`);
-
-  const request = {
-    name: processorName,
-    gcsDocument: {
-        gcsUri: gcsUri,
-        mimeType: mimeType,
-    },
-  };
-  console.log('Sending request to Document AI:', JSON.stringify(request, null, 2));
-
-  const [result] = await docAIClient.processDocument(request);
-  console.log('Received response from Document AI.');
-  const { document } = result;
-
-  if (!document || !document.text) {
-    console.warn('Document AI did not return any text for the PDF.');
-    throw new Error('Document AI did not return any text for the PDF.');
-  }
-
-  console.log(`Extracted text length: ${document.text.length}`);
-  console.log('--- processWithDocumentAI END ---');
-  return document.text;
+// This function now correctly handles different MIME types.
+async function extractTextFromFile(fileBuffer: Buffer, mimeType: string): Promise<string> {
+    console.log(`[DEBUG] extractTextFromFile received MIME type: ${mimeType}`);
+    if (mimeType === 'image/png' || mimeType === 'application/pdf') {
+        return processDocument(fileBuffer, mimeType);
+    } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const { value } = await mammoth.extractRawText({ buffer: fileBuffer });
+        return value;
+    } else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+        const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        return xlsx.utils.sheet_to_txt(worksheet);
+    } else if (mimeType === 'text/plain' || mimeType === 'application/json') {
+        return fileBuffer.toString('utf-8');
+    } else {
+        return `File type (${mimeType}) is not supported for text extraction.`;
+    }
 }
 
 export async function POST(req: NextRequest) {
-  console.log('--- /api/extract-text START ---');
   try {
     const { gcsUri, contentType } = await req.json();
-    console.log(`Received request for gcsUri: ${gcsUri}, contentType: ${contentType}`);
 
     if (!gcsUri || !contentType) {
-      console.error('gcsUri and/or contentType are missing');
-      return NextResponse.json({ error: 'gcsUri and contentType are required.' }, { status: 400 });
+      return NextResponse.json({ error: 'gcsUri and contentType are required' }, { status: 400 });
     }
 
-    let textContent = '';
+    const [bucket, ...fileParts] = gcsUri.replace('gs://', '').split('/');
+    const fileName = fileParts.join('/');
 
-    // PDF is handled by Document AI and doesn't need pre-downloading
-    if (contentType === 'application/pdf') {
-      console.log('Routing to Document AI for PDF processing.');
-      textContent = await processPdfWithDocumentAI(gcsUri, contentType);
-    } else {
-      // For all other types, we download the file first and process locally
-      const buffer = await downloadFile(gcsUri);
-
-      switch (contentType) {
-        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-          console.log('Processing DOCX file with mammoth...');
-          const docxResult = await mammoth.extractRawText({ buffer });
-          textContent = docxResult.value;
-          break;
-
-        case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-          console.log('Processing XLSX file with xlsx...');
-          const workbook = xlsx.read(buffer, { type: 'buffer' });
-          let fullText = '';
-          workbook.SheetNames.forEach(sheetName => {
-            const worksheet = workbook.Sheets[sheetName];
-            const sheetText = xlsx.utils.sheet_to_txt(worksheet);
-            fullText += `--- Sheet: ${sheetName} ---\n${sheetText}\n\n`;
-          });
-          textContent = fullText;
-          break;
-
-        case 'application/json':
-          console.log('Processing JSON file...');
-          const rawText = buffer.toString('utf-8');
-          const parsedJson = JSON.parse(rawText);
-          textContent = JSON.stringify(parsedJson, null, 2);
-          break;
-
-        case 'text/plain':
-          console.log('Processing plain text file...');
-          textContent = buffer.toString('utf-8');
-          break;
-
-        default:
-          console.log(`Unsupported content type for extraction: ${contentType}`);
-          break;
-      }
+    console.log(`[DEBUG] Downloading from GCS: gs://${bucket}/${fileName}`);
+    const [fileBuffer] = await storage.bucket(bucket).file(fileName).download();
+    
+    // --- Start of Debugging Block ---
+    let extractedText;
+    try {
+        console.log(`[DEBUG] Calling extractTextFromFile for ${contentType}...`);
+        extractedText = await extractTextFromFile(fileBuffer, contentType);
+        console.log(`[DEBUG] extractTextFromFile returned. Text length: ${extractedText.length}`);
+    } catch (e) {
+        console.error('[FATAL ERROR] Error occurred *within* extractTextFromFile call:', e);
+        const err = e instanceof Error ? e : new Error(String(e));
+        return NextResponse.json({ error: `Failed during text extraction process: ${err.message}` }, { status: 500 });
     }
+    // --- End of Debugging Block ---
 
-    console.log('--- /api/extract-text END ---');
-    return NextResponse.json({ text: textContent });
+    console.log(`[DEBUG] Final extracted text length: ${extractedText.length}`);
+    return NextResponse.json({ text: extractedText });
 
   } catch (error) {
-    console.error('--- ERROR in /api/extract-text ---');
-    console.error(error);
+    console.error('[ERROR] in /api/extract-text:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
     return NextResponse.json({ error: `Failed to extract text: ${errorMessage}` }, { status: 500 });
   }

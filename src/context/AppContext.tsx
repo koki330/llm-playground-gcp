@@ -1,25 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { useChat, Message } from 'ai/react';
 
-// Updated ContentPart to reference a GCS URI for images
-export interface ContentPart {
-  type: 'text' | 'image';
-  text?: string;
-  image?: {
-    gcsUri: string;
-    mediaType: string;
-    previewUrl?: string; // For frontend display
-  };
-}
-
-export interface Message {
-  id: string;
-  role: 'user' | 'model';
-  content: ContentPart[];
-}
-
-// Attachment now includes the previewUrl for the UI
 export interface Attachment {
   name: string;
   type: string;
@@ -31,23 +14,18 @@ export const MODEL_GROUPS = [
   {
     label: "Anthropic",
     models: {
-      'Claude 3.7 Sonnet': 'claude-3-7-sonnet-20250219',
-      'Claude 3.5 Sonnet': 'claude-3-5-sonnet-20240620',
-      'Claude 3.5 Haiku': 'claude-3-5-haiku-20241022',
-      'Claude 3 Opus': 'claude-3-opus-20240229',
-      'Claude 3 Sonnet': 'claude-3-sonnet-20240229',
-      'Claude 3 Haiku': 'claude-3-haiku-20240307',
+      // 'Claude 4 Opus': 'claude4-opus',
+      'Claude Sonnet 4': 'claude-sonnet4',
     }
   },
   {
     label: "OpenAI",
     models: {
       'GPT-4.1': 'gpt-4.1',
-      'GPT-4o': 'gpt-4o',
-      'GPT-4o mini': 'gpt-4o-mini',
-      'GPT-3.5 Turbo': 'gpt-3.5-turbo',
-      'O1': 'o1',
-      'O3-mini': 'o3-mini',
+      'GPT-4.1-mini': 'gpt-4.1-mini',
+      'GPT-4.1-nano': 'gpt-4.1-nano',
+      'O3': 'o3',
+      'O4-mini': 'o4-mini',
     }
   },
   {
@@ -55,125 +33,130 @@ export const MODEL_GROUPS = [
     models: {
       'Gemini 2.5 Pro': 'gemini-2.5-pro',
       'Gemini 2.5 Flash': 'gemini-2.5-flash',
-      'Gemini 1.5 Pro': 'gemini-1.5-pro',
-      'Gemini 1.5 Flash': 'gemini-1.5-flash',
     }
   }
 ];
 
-export const AVAILABLE_MODELS = MODEL_GROUPS.reduce((acc, group) => {
-  return { ...acc, ...group.models };
-}, {});
+interface UsageInfo {
+  limit: number | null;
+  total_cost: number;
+  isLimited: boolean;
+  usageWarning: string | null;
+}
 
 interface AppContextType {
   messages: Message[];
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   selectedModel: string;
   setSelectedModel: React.Dispatch<React.SetStateAction<string>>;
   isLoading: boolean;
-  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  isFileProcessing: boolean;
+  setIsFileProcessing: React.Dispatch<React.SetStateAction<boolean>>;
   systemPrompt: string;
   setSystemPrompt: React.Dispatch<React.SetStateAction<string>>;
   fileContent: string;
   setFileContent: React.Dispatch<React.SetStateAction<string>>;
-  submitPrompt: (prompt: string, attachments: Attachment[]) => void;
+  submitPrompt: (prompt: string) => void;
   clearConversation: () => void;
+  input: string;
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
+  usageInfo: UsageInfo | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedModel, setSelectedModel] = useState('claude-3-7-sonnet-20250219');
-  const [isLoading, setIsLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('gpt-4.1');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [fileContent, setFileContent] = useState(''); // Re-add state for extracted text
+  const [fileContent, setFileContent] = useState('');
+  const [isFileProcessing, setIsFileProcessing] = useState(false);
+  const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
+
+  const { messages, append, isLoading, input, setInput, setMessages } = useChat({
+    api: '/api/chat',
+    body: {
+      modelId: selectedModel,
+      systemPrompt: systemPrompt,
+    },
+    onFinish: () => {
+      // Refetch usage info after a conversation is finished
+      fetchUsage(selectedModel);
+    }
+  });
+
+  const fetchUsage = async (modelId: string) => {
+    try {
+      const response = await fetch(`/api/get-usage?modelId=${modelId}`);
+      if (!response.ok) {
+        setUsageInfo(null);
+        return;
+      }
+      const data = await response.json();
+      let usageWarning: string | null = null;
+      let isLimited = false;
+      if (data.limit !== null) {
+        if (data.total_cost >= data.limit) {
+          usageWarning = '利用上限に達しました。別のモデルを使用してください。';
+          isLimited = true;
+        } else if (data.total_cost >= data.limit * 0.8) {
+          usageWarning = '利用上限の8割に到達しました。';
+        }
+      }
+      setUsageInfo({ ...data, isLimited, usageWarning });
+    } catch (error) {
+      console.error('Failed to fetch usage info:', error);
+      setUsageInfo(null);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedModel) {
+      fetchUsage(selectedModel);
+    }
+  }, [selectedModel]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+  };
 
   const clearConversation = () => {
     setMessages([]);
-    setFileContent(''); // Clear file content as well
+    setFileContent('');
   };
 
-  const submitPrompt = async (prompt: string, attachments: Attachment[] = []) => {
-    setIsLoading(true);
-
-    const content: ContentPart[] = [];
-
-    // Combine file content with the user's prompt if it exists
+  const submitPrompt = async (prompt: string) => {
+    if (usageInfo?.isLimited) {
+      // Prevent submission if the model limit is reached
+      return;
+    }
     let combinedPrompt = prompt;
     if (fileContent) {
-      combinedPrompt = `Extracted File Content:\n\n${fileContent}\n\n---\n\nUser Prompt:\n\n${prompt}`;
-    }
-    content.push({ type: 'text', text: combinedPrompt });
-
-    // Add image attachments if any
-    if (attachments.length > 0) {
-      attachments.forEach(file => {
-        if (file.type.startsWith('image')) {
-          content.push({
-            type: 'image',
-            image: { 
-              gcsUri: file.gcsUri, 
-              mediaType: file.type, 
-              previewUrl: file.previewUrl 
-            },
-          });
-        }
-      });
+      combinedPrompt = `The user has uploaded a file. Its content is:\n\n${fileContent}\n\n---\n\nUser prompt:\n\n${prompt}`;
     }
 
-    const newUserMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: content,
-    };
+    await append({ role: 'user', content: combinedPrompt });
 
-    const newMessages = [...messages, newUserMessage];
-    setMessages(newMessages);
-    setFileContent(''); // Clear file content after sending
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: newMessages,
-          modelId: selectedModel,
-          systemPrompt: systemPrompt,
-        }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error(`API error: ${response.statusText}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let modelResponse = '';
-      const modelMessageId = Date.now().toString() + '-model';
-
-      setMessages(prev => [...prev, { id: modelMessageId, role: 'model', content: [{ type: 'text', text: '...' }] }]);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        modelResponse += decoder.decode(value, { stream: true });
-        setMessages(prev => prev.map(msg =>
-          msg.id === modelMessageId ? { ...msg, content: [{ type: 'text', text: modelResponse }] } : msg
-        ));
-      }
-
-    } catch (error) {
-      console.error('Failed to fetch chat response:', error);
-      const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', content: [{ type: 'text', text: `Error: ${errorMsg}` }] }]);
-    } finally {
-      setIsLoading(false);
-    }
+    setInput('');
+    setFileContent('');
   };
 
   return (
-    <AppContext.Provider value={{ messages, setMessages, selectedModel, setSelectedModel, isLoading, setIsLoading, systemPrompt, setSystemPrompt, fileContent, setFileContent, submitPrompt, clearConversation }}>
+    <AppContext.Provider value={{ 
+        messages,
+        selectedModel, 
+        setSelectedModel, 
+        isLoading: isLoading || isFileProcessing,
+        isFileProcessing, 
+        setIsFileProcessing,
+        systemPrompt, 
+        setSystemPrompt, 
+        fileContent,
+        setFileContent,
+        submitPrompt, 
+        clearConversation,
+        input,
+        handleInputChange,
+        usageInfo,
+    }}>
       {children}
     </AppContext.Provider>
   );

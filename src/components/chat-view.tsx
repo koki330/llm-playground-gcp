@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import Image from 'next/image';
 import { useAppContext } from '@/context/AppContext';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
@@ -36,26 +35,8 @@ const ChatView = () => {
                     : 'bg-gray-700'
                 )}
               >
-                <div>
-                  {msg.content.map((part, index) => {
-                    if (part.type === 'text') {
-                      return <p key={index}>{part.text}</p>;
-                    } else if (part.type === 'image' && part.image?.previewUrl) {
-                      return (
-                        <div key={index} className="my-2">
-                          <Image 
-                            src={part.image.previewUrl} 
-                            alt="User upload"
-                            width={300} // Provide appropriate dimensions
-                            height={200}
-                            className="rounded-lg"
-                          />
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
-                </div>
+                {/* The content from useChat is a simple string */}
+                <p>{msg.content}</p>
               </div>
             </div>
           ))

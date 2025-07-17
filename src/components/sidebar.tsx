@@ -3,15 +3,23 @@
 import { useAppContext, MODEL_GROUPS } from "@/context/AppContext";
 
 const Sidebar = () => {
-  const { selectedModel, setSelectedModel, isLoading, systemPrompt, setSystemPrompt, fileContent } = useAppContext();
+  const { 
+    selectedModel, 
+    setSelectedModel, 
+    isLoading, 
+    systemPrompt, 
+    setSystemPrompt, 
+    fileContent,
+    usageInfo 
+  } = useAppContext();
 
   return (
     <aside className="w-64 p-4 bg-gray-800 border-r border-gray-700 overflow-y-auto">
-      <h2 className="text-lg font-semibold mb-4">Model</h2>
+      <h2 className="text-lg font-semibold mb-2">Model</h2>
       <select
         value={selectedModel}
         onChange={(e) => setSelectedModel(e.target.value)}
-        disabled={isLoading}
+        disabled={isLoading || usageInfo?.isLimited}
         className="w-full p-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
       >
         {MODEL_GROUPS.map(group => (
@@ -24,6 +32,11 @@ const Sidebar = () => {
           </optgroup>
         ))}
       </select>
+      {usageInfo?.usageWarning && (
+        <div className="mt-2 p-2 text-sm text-yellow-400 bg-yellow-900/50 rounded-lg">
+          {usageInfo.usageWarning}
+        </div>
+      )}
 
       <h2 className="text-lg font-semibold mt-6 mb-4">System Prompt</h2>
       <textarea

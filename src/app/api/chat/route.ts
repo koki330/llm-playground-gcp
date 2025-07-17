@@ -1,183 +1,172 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getVertexAIService } from '@/services/vertexai';
-import { getOpenAIService } from '@/services/openai';
-import { getAnthropicService } from '@/services/anthropic';
+import { CoreMessage, streamText } from 'ai';
+import { getOpenAIProvider } from '@/services/openai';
+import { getAnthropicProvider } from '@/services/anthropic';
+import { getGoogleProvider } from '@/services/vertexai';
 import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
-import { Message } from '@/types';
-import { GenerateContentResponse } from '@google-cloud/vertexai';
-import { ChatCompletionChunk } from 'openai/resources/chat/completions';
-import { RawMessageStreamEvent } from '@anthropic-ai/sdk/resources/messages';
+import { getPricing } from '@/config/pricing';
+import { get_encoding } from 'tiktoken';
 
-const GEMINI_2_5_PRO_MODEL_ID = 'gemini-2.5-pro';
-const MONTHLY_LIMIT_USD = 300;
-
-// Pricing per 1 million tokens for Gemini 2.5 Pro
-const PRICING = {
-  INPUT: 1.25,
-  OUTPUT: 10.00,
-};
-
-interface Usage {
-  promptTokenCount: number;
-  candidatesTokenCount: number;
-}
-
-// Helper to manage usage tracking in Firestore
-const usageTracker = {
-  getDocRef: () => firestore.collection('usage_tracking').doc(GEMINI_2_5_PRO_MODEL_ID),
-
-  getUsage: async () => {
-    const docRef = usageTracker.getDocRef();
-    const doc = await docRef.get();
-    const year_month = new Date().toISOString().slice(0, 7);
-
-    if (!doc.exists || doc.data()?.year_month !== year_month) {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = (now.getMonth() + 1).toString().padStart(2, '0');
-      const day = now.getDate().toString().padStart(2, '0');
-      const hours = now.getHours().toString().padStart(2, '0');
-      const minutes = now.getMinutes().toString().padStart(2, '0');
-      const lastUpdatedTimestamp = `${year}/${month}/${day}/${hours}:${minutes}`;
-      await docRef.set({ total_cost: 0, year_month, daily_costs: {}, last_updated: lastUpdatedTimestamp });
-      return { total_cost: 0, year_month };
-    }
-    return doc.data() as { total_cost: number; year_month: string };
-  },
-
-  updateUsage: async (inputTokens: number, outputTokens: number) => {
-    const inputCost = (inputTokens / 1_000_000) * PRICING.INPUT;
-    const outputCost = (outputTokens / 1_000_000) * PRICING.OUTPUT;
-    const requestCost = inputCost + outputCost;
-    const docRef = usageTracker.getDocRef();
-    const today = new Date().toISOString().slice(0, 10);
-    const dailyCostField = `daily_costs.${today}`;
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const lastUpdatedTimestamp = `${year}/${month}/${day}/${hours}:${minutes}`;
-    await docRef.update({
-      total_cost: FieldValue.increment(requestCost),
-      [dailyCostField]: FieldValue.increment(requestCost),
-      last_updated: lastUpdatedTimestamp,
-    });
-  },
-};
-
-// Stream transformers for different AI services
-async function* vertexAIStreamTransformer(stream: AsyncGenerator<GenerateContentResponse>, onComplete: (usage: Usage) => void): AsyncGenerator<Uint8Array> {
-  const encoder = new TextEncoder();
-  let usageMetadata;
-  for await (const chunk of stream) {
-    if (chunk.candidates && chunk.candidates.length > 0) {
-      const text = chunk.candidates[0]?.content?.parts[0]?.text;
-      if (text) yield encoder.encode(text);
-    }
-    if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
-  }
-  if (usageMetadata) {
-    onComplete({
-      promptTokenCount: usageMetadata.promptTokenCount || 0,
-      candidatesTokenCount: usageMetadata.candidatesTokenCount || 0,
-    });
-  }
-}
-
-async function* openAIStreamTransformer(stream: AsyncIterable<ChatCompletionChunk
->): AsyncGenerator<Uint8Array> {
-  const encoder = new TextEncoder();
-  for await (const chunk of stream) {
-    const text = chunk.choices[0]?.delta?.content;
-    if (text) yield encoder.encode(text);
-  }
-}
-
-async function* anthropicStreamTransformer(stream: AsyncIterable<
-RawMessageStreamEvent>): AsyncGenerator<Uint8Array> {
-  const encoder = new TextEncoder();
-  for await (const chunk of stream) {
-    if (chunk.type === 'content_block_delta' && chunk.delta.type ===
-      'text_delta') {
-      const text = chunk.delta.text;
-      if (text) yield encoder.encode(text);
-    }
-  }
-}
-
-function toReadableStream(asyncIterator: AsyncGenerator<Uint8Array>): ReadableStream {
-  const iterator = asyncIterator;
-  return new ReadableStream({
-    async pull(controller) {
-      const { value, done } = await iterator.next();
-      if (done) {
-        controller.close();
-      } else {
-        controller.enqueue(value);
-      }
-    },
-  });
-}
-
-interface RequestBody {
-  messages: Message[];
+// The request body now only contains the final, combined conversation history.
+interface ChatRequestBody {
+  messages: CoreMessage[];
   modelId: string;
   systemPrompt?: string;
 }
 
+const MONTHLY_LIMITS_USD: { [key: string]: number } = {
+  'claude-sonnet4': 120,
+  'o3': 300,
+};
+
+// Initialize the tokenizer for OpenAI models
+const enc = get_encoding('cl100k_base');
+
+// Usage tracking logic remains the same.
+const usageTracker = {
+    getDocRef: (modelId: string) => firestore.collection('usage_tracking').doc(modelId),
+    getUsage: async (modelId: string) => {
+      const docRef = usageTracker.getDocRef(modelId);
+      const doc = await docRef.get();
+      const year_month = new Date().toISOString().slice(0, 7);
+      if (!doc.exists || doc.data()?.year_month !== year_month) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const day = now.getDate().toString().padStart(2, '0');
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const lastUpdatedTimestamp = `${year}/${month}/${day}/${hours}:${minutes}`;
+        await docRef.set({ total_cost: 0, year_month, daily_costs: {}, last_updated: lastUpdatedTimestamp });
+        return { total_cost: 0, year_month };
+      }
+      return doc.data() as { total_cost: number; year_month: string };
+    },
+    updateUsage: async (modelId: string, inputTokens?: number, outputTokens?: number) => {
+        const safeInputTokens = inputTokens || 0;
+        const safeOutputTokens = outputTokens || 0;
+        const pricing = getPricing(modelId);
+        if (!pricing) {
+          console.warn(`No pricing info for model ${modelId}. Skipping usage update.`);
+          return;
+        }
+        const inputCost = (safeInputTokens / 1_000_000) * pricing.input;
+        const outputCost = (safeOutputTokens / 1_000_000) * pricing.output;
+        const requestCost = inputCost + outputCost;
+        const docRef = usageTracker.getDocRef(modelId);
+        const today = new Date().toISOString().slice(0, 10);
+        const dailyCostField = `daily_costs.${today}`;
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const day = now.getDate().toString().padStart(2, '0');
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const lastUpdatedTimestamp = `${year}/${month}/${day}/${hours}:${minutes}`;
+        await docRef.update({
+          total_cost: FieldValue.increment(requestCost),
+          [dailyCostField]: FieldValue.increment(requestCost),
+          last_updated: lastUpdatedTimestamp,
+        });
+    },
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const body: RequestBody = await req.json();
+    const body: ChatRequestBody = await req.json();
     const { messages, modelId, systemPrompt } = body;
-
-    console.log(`Received request for modelId: ${modelId}`);
 
     if (!messages || !modelId) {
       return NextResponse.json({ error: 'messages and modelId are required' }, { status: 400 });
     }
 
-    if (modelId === GEMINI_2_5_PRO_MODEL_ID) {
-      const usage = await usageTracker.getUsage();
-      if (usage.total_cost >= MONTHLY_LIMIT_USD) {
-        return NextResponse.json({ error: `Monthly usage limit of ${MONTHLY_LIMIT_USD} for ${modelId} has been reached.` }, { status: 429 });
+    const limit = MONTHLY_LIMITS_USD[modelId];
+    if (limit) {
+      const usage = await usageTracker.getUsage(modelId);
+      if (usage.total_cost >= limit) {
+        return NextResponse.json({ error: `Monthly usage limit of ${limit} for ${modelId} has been reached.` }, { status: 429 });
       }
     }
 
-    let readableStream;
+    const onFinishCallback = async (result: {
+        usage?: { promptTokens: number; completionTokens: number };
+        text?: string;
+        [key: string]: unknown;
+    }) => {
+        try {
+            let promptTokens = 0;
+            let completionTokens = 0;
 
-    if (modelId.startsWith('gemini')) {
-      const vertexAI = getVertexAIService();
-      const streamResult = await vertexAI.getStreamingResponse(messages, modelId, systemPrompt || '');
-      const onComplete = (usage: Usage) => {
-        if (modelId === GEMINI_2_5_PRO_MODEL_ID) {
-          usageTracker.updateUsage(usage.promptTokenCount, usage.candidatesTokenCount).catch(console.error);
+            if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
+                // Manual token calculation for OpenAI
+                const inputText = messages
+                    .map(m => Array.isArray(m.content) 
+                        ? m.content.filter(c => c.type === 'text').map(c => c.text).join('\n') 
+                        : m.content)
+                    .join('\n');
+                promptTokens = enc.encode(inputText).length;
+                completionTokens = result.text ? enc.encode(result.text).length : 0;
+                console.log(`[DEBUG] Manual OpenAI token count: Input=${promptTokens}, Output=${completionTokens}`);
+            } else {
+                // Standard Vercel AI SDK usage for other providers
+                const usage = result.usage;
+                if (!usage) {
+                    console.error(`[ERROR] 'usage' object is missing in onFinish callback for ${modelId}.`);
+                    return;
+                }
+                promptTokens = usage.promptTokens;
+                completionTokens = usage.completionTokens;
+            }
+
+            await usageTracker.updateUsage(modelId, promptTokens, completionTokens);
+        } catch (error) {
+            console.error(`[FATAL ERROR] An unexpected error occurred inside onFinish for ${modelId}:`, error);
         }
-      };
-      const transformedStream = vertexAIStreamTransformer(streamResult.stream, onComplete);
-      readableStream = toReadableStream(transformedStream);
+    };
 
-    } else if (modelId.startsWith('gpt') || modelId.startsWith('o1') || modelId.startsWith('o3')) {
-      const openAI = getOpenAIService();
-      const stream = await openAI.getStreamingResponse(messages, modelId, systemPrompt || '');
-      const transformedStream = openAIStreamTransformer(stream);
-      readableStream = toReadableStream(transformedStream);
+    const onErrorCallback = ({ error }: { error: unknown }) => {
+        console.error(`[STREAM_ERROR] An error occurred during the stream for model ${modelId}:`, error);
+    };
+
+    if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
+        const result = await streamText({
+            model: getOpenAIProvider()(modelId),
+            messages: messages,
+            system: systemPrompt,
+            onFinish: onFinishCallback,
+            onError: onErrorCallback,
+        });
+        return result.toDataStreamResponse();
 
     } else if (modelId.startsWith('claude')) {
-      const anthropic = getAnthropicService();
-      const stream = await anthropic.getStreamingResponse(messages, modelId, systemPrompt || '');
-      const transformedStream = anthropicStreamTransformer(stream);
-      readableStream = toReadableStream(transformedStream);
+        const claudeModelMap: { [key: string]: string } = {
+            // 'claude4-opus': 'claude-opus-4-20250514',
+            'claude-sonnet4': 'claude-sonnet-4-20250514'
+        };
+        const anthropicModelId = claudeModelMap[modelId] || modelId;
+        const result = await streamText({
+            model: getAnthropicProvider()(anthropicModelId),
+            messages: messages,
+            system: systemPrompt || 'You are a helpful assistant.',
+            onFinish: onFinishCallback,
+            onError: onErrorCallback,
+        });
+        return result.toDataStreamResponse();
+
+    } else if (modelId.startsWith('gemini')) {
+        const result = await streamText({
+            model: getGoogleProvider()(modelId),
+            messages: messages,
+            system: systemPrompt,
+            onFinish: onFinishCallback,
+            onError: onErrorCallback,
+        });
+        return result.toDataStreamResponse();
 
     } else {
       return NextResponse.json({ error: `Model ${modelId} not supported yet.` }, { status: 400 });
     }
-
-    return new Response(readableStream, {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    });
 
   } catch (error) {
     console.error('Error in chat API:', error);
@@ -185,5 +174,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
-
-

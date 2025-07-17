@@ -1,10 +1,14 @@
 import { Storage } from '@google-cloud/storage';
 import { NextResponse } from 'next/server';
 
-// Initialize the GCS storage client
+// Explicitly use credentials for local development if the env var is set.
+// In Cloud Run, the env var will be undefined, and the library will fall back
+// to using the attached service account automatically (ADC).
+const serviceAccountJson = process.env.LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON;
+const credentials = serviceAccountJson ? JSON.parse(serviceAccountJson) : undefined;
+
 const storage = new Storage({
-  // These will be picked up from environment variables
-  // GOOGLE_CLOUD_PROJECT_ID and the service account credentials
+  credentials,
 });
 
 // Get the bucket name from an environment variable
