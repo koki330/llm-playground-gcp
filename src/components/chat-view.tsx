@@ -1,12 +1,44 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { codeToHtml } from 'shiki';
+
+interface CodeBlockProps {
+  className?: string;
+  children: React.ReactNode;
+}
+
+const CodeBlock = memo(({ className, children }: CodeBlockProps) => {
+  const [highlightedCode, setHighlightedCode] = useState('');
+  const lang = className?.replace(/language-/, '') || 'text';
+  const codeString = String(children).replace(/\n$/, '');
+
+  useEffect(() => {
+    const highlight = async () => {
+      try {
+        const html = await codeToHtml(codeString, {
+          lang,
+          theme: 'vsc-dark-plus'
+        });
+        setHighlightedCode(html);
+      } catch (error) {
+        console.error('Error highlighting code:', error);
+        // In case of error, fallback to plain text
+        setHighlightedCode(`<pre><code>${codeString}</code></pre>`);
+      }
+    };
+    highlight();
+  }, [codeString, lang]);
+
+  // Use a key to force re-render when highlightedCode changes
+  return <div key={highlightedCode} dangerouslySetInnerHTML={{ __html: highlightedCode }} />;
+});
+
+CodeBlock.displayName = 'CodeBlock';
 
 const ChatView = () => {
   const { messages } = useAppContext();
@@ -32,7 +64,7 @@ const ChatView = () => {
             >
               <div
                 className={cn(
-                  'p-3 rounded-lg max-w-xl',
+                  'p-3 rounded-lg max-w-xl whitespace-pre-wrap',
                   msg.role === 'user'
                     ? 'bg-blue-600'
                     : 'bg-gray-700',
@@ -41,19 +73,13 @@ const ChatView = () => {
               >
                 <ReactMarkdown
                   components={{
-                    code({ node, className, children, ...props }) {
+                    code(props) {
+                      const { children, className } = props;
                       const match = /language-(\w+)/.exec(className || '');
                       return match ? (
-                        <SyntaxHighlighter
-                          style={vscDarkPlus}
-                          language={match[1]}
-                          PreTag="div"
-                          {...props}
-                        >
-                          {String(children).replace(/\n$/, '')}
-                        </SyntaxHighlighter>
+                        <CodeBlock className={className}>{children}</CodeBlock>
                       ) : (
-                        <code className={className} {...props}>
+                        <code className={className}>
                           {children}
                         </code>
                       );
