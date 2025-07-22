@@ -31,10 +31,10 @@ const CodeBlock = memo(({ className, children }: CodeBlockProps) => {
   }, [codeString, lang]);
 
   // Use a key to force re-render when highlightedCode changes
-  return <div key={highlightedCode} dangerouslySetInnerHTML={{ __html: highlightedCode }} />;
+  const DOMPurify = require('dompurify');
+  return <div key={highlightedCode} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlightedCode) }} />;
 });
 
 CodeBlock.displayName = 'CodeBlock';
 
 export default CodeBlock;
-
