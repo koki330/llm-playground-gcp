@@ -14,25 +14,32 @@ const CodeBlock = memo(({ className, children }: CodeBlockProps) => {
   const codeString = String(children).replace(/\n$/, '');
 
   useEffect(() => {
-    const highlight = async () => {
+    const highlightAndSanitize = async () => {
       try {
+        // Step 1: Highlight code with shiki
         const html = await codeToHtml(codeString, {
           lang,
           theme: 'github-dark'
         });
-        setHighlightedCode(html);
+
+        // Step 2: Dynamically import DOMPurify and sanitize the HTML
+        const DOMPurify = (await import('dompurify')).default;
+        const sanitizedHtml = DOMPurify.sanitize(html);
+
+        setHighlightedCode(sanitizedHtml);
+
       } catch (error) {
-        console.error('Error highlighting code:', error);
-        // In case of error, fallback to plain text
+        console.error('Error highlighting or sanitizing code:', error);
+        // In case of error, fallback to plain text (already safe)
         setHighlightedCode(`<pre><code>${codeString}</code></pre>`);
       }
     };
-    highlight();
+
+    highlightAndSanitize();
   }, [codeString, lang]);
 
   // Use a key to force re-render when highlightedCode changes
-  const DOMPurify = require('dompurify');
-  return <div key={highlightedCode} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlightedCode) }} />;
+  return <div key={highlightedCode} dangerouslySetInnerHTML={{ __html: highlightedCode }} />;
 });
 
 CodeBlock.displayName = 'CodeBlock';
