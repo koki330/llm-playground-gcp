@@ -5,6 +5,7 @@ import { useAppContext } from '@/context/AppContext';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 
 const CodeBlock = dynamic(() => import('./code-block'), { ssr: false });
@@ -41,6 +42,7 @@ const ChatView = () => {
                 )}
               >
                 <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
                   components={{
                     code(props) {
                       const { children, className } = props;
