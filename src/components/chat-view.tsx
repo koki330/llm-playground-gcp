@@ -1,44 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState, memo } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
-import { codeToHtml } from 'shiki';
+import dynamic from 'next/dynamic';
 
-interface CodeBlockProps {
-  className?: string;
-  children: React.ReactNode;
-}
-
-const CodeBlock = memo(({ className, children }: CodeBlockProps) => {
-  const [highlightedCode, setHighlightedCode] = useState('');
-  const lang = className?.replace(/language-/, '') || 'text';
-  const codeString = String(children).replace(/\n$/, '');
-
-  useEffect(() => {
-    const highlight = async () => {
-      try {
-        const html = await codeToHtml(codeString, {
-          lang,
-          theme: 'vsc-dark-plus'
-        });
-        setHighlightedCode(html);
-      } catch (error) {
-        console.error('Error highlighting code:', error);
-        // In case of error, fallback to plain text
-        setHighlightedCode(`<pre><code>${codeString}</code></pre>`);
-      }
-    };
-    highlight();
-  }, [codeString, lang]);
-
-  // Use a key to force re-render when highlightedCode changes
-  return <div key={highlightedCode} dangerouslySetInnerHTML={{ __html: highlightedCode }} />;
-});
-
-CodeBlock.displayName = 'CodeBlock';
+const CodeBlock = dynamic(() => import('./code-block'), { ssr: false });
 
 const ChatView = () => {
   const { messages } = useAppContext();
@@ -64,11 +33,11 @@ const ChatView = () => {
             >
               <div
                 className={cn(
-                  'p-3 rounded-lg max-w-xl whitespace-pre-wrap',
+                  'p-3 rounded-lg max-w-4xl break-words',
                   msg.role === 'user'
                     ? 'bg-blue-600'
                     : 'bg-gray-700',
-                  'prose prose-invert max-w-none'
+                  'prose prose-invert'
                 )}
               >
                 <ReactMarkdown
