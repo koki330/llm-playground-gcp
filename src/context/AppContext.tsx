@@ -41,7 +41,8 @@ export const MODEL_GROUPS = [
       'O3': 'o3',
       'O4-mini': 'o4-mini',
     }
-  },
+  }
+  ,
   {
     label: "Gemini",
     models: {
@@ -81,6 +82,8 @@ interface AppContextType {
   reasoningPreset: ReasoningPreset;
   setReasoningPreset: React.Dispatch<React.SetStateAction<ReasoningPreset>>;
   currentModelConfig: { type: 'reasoning' | 'normal', maxTokens: number } | undefined;
+  isWebSearchEnabled: boolean;
+  setIsWebSearchEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -96,6 +99,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [temperaturePreset, setTemperaturePreset] = useState<TemperaturePreset>('balanced');
   const [maxTokens, setMaxTokens] = useState(4096);
   const [reasoningPreset, setReasoningPreset] = useState<ReasoningPreset>('middle');
+  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
 
   const currentModelConfig = MODEL_CONFIG[selectedModel];
 
@@ -108,6 +112,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       temperaturePreset: currentModelConfig?.type === 'normal' ? temperaturePreset : undefined,
       maxTokens: currentModelConfig?.type === 'normal' ? maxTokens : undefined,
       reasoningPreset: currentModelConfig?.type === 'reasoning' ? reasoningPreset : undefined,
+      webSearchEnabled: isWebSearchEnabled,
     },
     onFinish: () => {
       fetchUsage(selectedModel);
@@ -142,6 +147,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (selectedModel) {
       fetchUsage(selectedModel);
+      // Reset web search on model change
+      setIsWebSearchEnabled(false);
       // Update maxTokens based on the selected model's config
       const newMax = MODEL_CONFIG[selectedModel]?.maxTokens;
       if (newMax) {
@@ -194,6 +201,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         reasoningPreset,
         setReasoningPreset,
         currentModelConfig,
+        isWebSearchEnabled,
+        setIsWebSearchEnabled,
     }}>
       {children}
     </AppContext.Provider>

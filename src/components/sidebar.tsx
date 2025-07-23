@@ -1,7 +1,7 @@
 'use client';
 
 import { useAppContext, MODEL_GROUPS, ReasoningPreset, TemperaturePreset } from "@/context/AppContext";
-import { FileText, SlidersHorizontal, BrainCircuit } from 'lucide-react';
+import { FileText, SlidersHorizontal, BrainCircuit, Globe } from 'lucide-react';
 
 const supportedFiles = [
   'PDF', 'PNG', 'DOCX', 'XLSX', 'TXT', 'JSON'
@@ -23,6 +23,8 @@ const Sidebar = () => {
     reasoningPreset,
     setReasoningPreset,
     currentModelConfig,
+    isWebSearchEnabled,
+    setIsWebSearchEnabled,
   } = useAppContext();
 
   const handleMaxTokensChange = (value: string) => {
@@ -84,19 +86,41 @@ const Sidebar = () => {
 
     if (currentModelConfig.type === 'reasoning') {
       return (
-        <div>
-          <label htmlFor="reasoningPreset" className="block text-sm font-medium text-gray-300">リーゾニング精度</label>
-          <select
-            id="reasoningPreset"
-            value={reasoningPreset}
-            onChange={(e) => setReasoningPreset(e.target.value as ReasoningPreset)}
-            className="w-full p-2 mt-1 bg-gray-700 rounded-md"
-            disabled={isLoading}
-          >
-            <option value="low">Low</option>
-            <option value="middle">Middle</option>
-            <option value="high">High</option>
-          </select>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="reasoningPreset" className="block text-sm font-medium text-gray-300">リーゾニング精度</label>
+            <select
+              id="reasoningPreset"
+              value={reasoningPreset}
+              onChange={(e) => setReasoningPreset(e.target.value as ReasoningPreset)}
+              className="w-full p-2 mt-1 bg-gray-700 rounded-md"
+              disabled={isLoading}
+            >
+              <option value="low">Low</option>
+              <option value="middle">Middle</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+
+          {selectedModel === 'o3' && (
+            <div className="pt-4 border-t border-gray-700/50">
+               <h3 className="flex items-center gap-2 text-md font-semibold mb-3 text-gray-300">
+                <Globe size={18} />
+                Tools
+              </h3>
+              <div className="flex items-center justify-between">
+                <label htmlFor="webSearch" className="text-sm font-medium text-gray-300">Web検索を有効にする</label>
+                <input
+                  type="checkbox"
+                  id="webSearch"
+                  checked={isWebSearchEnabled}
+                  onChange={(e) => setIsWebSearchEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          )}
         </div>
       );
     }

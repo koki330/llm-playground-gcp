@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CoreMessage, streamText } from 'ai';
+import { CoreMessage, streamText, generateObject } from 'ai';
 import { getOpenAIProvider } from '@/services/openai';
 import { getAnthropicProvider } from '@/services/anthropic';
 import { getGoogleProvider } from '@/services/vertexai';
@@ -7,6 +7,8 @@ import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
 import { getPricing } from '@/config/pricing';
 import { get_encoding } from 'tiktoken';
+import { z } from 'zod';
+import { searchOnGoogle, SearchResult } from '@/services/googleSearch';
 
 interface ChatRequestBody {
   messages: CoreMessage[];
@@ -15,6 +17,7 @@ interface ChatRequestBody {
   temperaturePreset?: 'precise' | 'balanced' | 'creative';
   maxTokens?: number;
   reasoningPreset?: 'low' | 'middle' | 'high';
+  webSearchEnabled?: boolean;
 }
 
 const MONTHLY_LIMITS_USD: { [key: string]: number } = {
@@ -87,7 +90,7 @@ const usageTracker = {
 export async function POST(req: NextRequest) {
   try {
     const body: ChatRequestBody = await req.json();
-    const { messages, modelId, systemPrompt, temperaturePreset, maxTokens, reasoningPreset } = body;
+    const { messages, modelId, systemPrompt, temperaturePreset, maxTokens, reasoningPreset, webSearchEnabled } = body;
 
     if (!messages || !modelId) {
       return NextResponse.json({ error: 'messages and modelId are required' }, { status: 400 });
@@ -128,27 +131,60 @@ export async function POST(req: NextRequest) {
       finalTemperature = TEMP_PRESET_MAP[temperaturePreset];
     }
 
-    const streamTextConfig = {
-      messages: messages,
-      system: systemPrompt,
-      temperature: finalTemperature,
-      maxTokens: maxTokens,
-      onFinish: onFinishCallback,
-    };
+    if (modelId === 'o3' && webSearchEnabled) {
+      // Step 1: Generate a search query from the user's last message.
+      const lastMessage = messages[messages.length - 1];
+      const { object: { query } } = await generateObject({
+        model: getOpenAIProvider()(modelId),
+        schema: z.object({
+          query: z.string().describe('A concise and effective search query based on the user prompt.'),
+        }),
+        prompt: `Based on the following user prompt, what is the most relevant and effective search query to find up-to-date information? User Prompt: \"${lastMessage.content}\"`,
+      });
 
-    if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
-        const result = await streamText({ ...streamTextConfig, model: getOpenAIProvider()(modelId) });
-        return result.toDataStreamResponse();
-    } else if (modelId.startsWith('claude')) {
-        const claudeModelMap: { [key: string]: string } = { 'claude-sonnet4': 'claude-sonnet-4-20250514' };
-        const anthropicModelId = claudeModelMap[modelId] || modelId;
-        const result = await streamText({ ...streamTextConfig, model: getAnthropicProvider()(anthropicModelId), system: systemPrompt || 'You are a helpful assistant.' });
-        return result.toDataStreamResponse();
-    } else if (modelId.startsWith('gemini')) {
-        const result = await streamText({ ...streamTextConfig, model: getGoogleProvider()(modelId) });
-        return result.toDataStreamResponse();
+      // Step 2: Perform the web search.
+      const searchResults = await searchOnGoogle(query);
+      
+      // Step 3: Generate the final answer based on the search results and user's persona.
+      const persona = systemPrompt ? `${systemPrompt}\n\n---\n\n` : '';
+      const researchInstructions = `You are an expert research assistant. Your goal is to provide a comprehensive, well-structured answer to the user's question based *only* on the provided search results. \n\nINSTRUCTIONS:\n1. Synthesize the information from the search results to formulate a single, coherent answer.\n2. Do not mention that you are using search results (e.g., \"According to the search results...\"). Act as if you know the information innately.\n3. At the end of your answer, create a new section titled \"参考資料\".\n4. In this section, list the titles of the web pages you used to formulate your answer, and make each title a hyperlink to its corresponding URL using Markdown format.\n   Example:\n   ### 参考資料\n   - [東京の天気 - ウェザーニュース](https://weathernews.jp/onebox/tenki/tokyo/)\n   - [東京都の天気 - 日本気象協会 tenki.jp](https://tenki.jp/forecast/3/16/)\n5. If the search results are empty or do not contain relevant information, simply state: \"申し訳ありませんが、関連情報を見つけることができませんでした。\"\n\nSEARCH RESULTS (for your reference only):\n---\n${searchResults.map((item: SearchResult, index: number) => `[${index + 1}] Title: ${item.title}\nSnippet: ${item.snippet}\nURL: ${item.link}`).join('\n\n') || 'No results found.'}\n---\n`;
+
+      const finalSystemPrompt = `${persona}${researchInstructions}`;
+
+      const result = await streamText({
+        messages: [lastMessage],
+        system: finalSystemPrompt,
+        model: getOpenAIProvider()(modelId),
+        temperature: finalTemperature,
+        maxTokens: maxTokens,
+        onFinish: onFinishCallback,
+      });
+      return result.toDataStreamResponse();
+
     } else {
-      return NextResponse.json({ error: `Model ${modelId} not supported yet.` }, { status: 400 });
+      // --- Default flow for all other cases ---
+      const streamTextConfig = {
+        messages: messages,
+        system: systemPrompt,
+        temperature: finalTemperature,
+        maxTokens: maxTokens,
+        onFinish: onFinishCallback,
+      };
+
+      if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
+          const result = await streamText({ ...streamTextConfig, model: getOpenAIProvider()(modelId) });
+          return result.toDataStreamResponse();
+      } else if (modelId.startsWith('claude')) {
+          const claudeModelMap: { [key: string]: string } = { 'claude-sonnet4': 'claude-sonnet-4-20250514' };
+          const anthropicModelId = claudeModelMap[modelId] || modelId;
+          const result = await streamText({ ...streamTextConfig, model: getAnthropicProvider()(anthropicModelId), system: systemPrompt || 'You are a helpful assistant.' });
+          return result.toDataStreamResponse();
+      } else if (modelId.startsWith('gemini')) {
+          const result = await streamText({ ...streamTextConfig, model: getGoogleProvider()(modelId) });
+          return result.toDataStreamResponse();
+      } else {
+        return NextResponse.json({ error: `Model ${modelId} not supported yet.` }, { status: 400 });
+      }
     }
 
   } catch (error) {

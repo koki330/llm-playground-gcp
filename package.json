@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "latest",
-    "@ai-sdk/google": "latest",
+    "@ai-sdk/google": "^1.2.22",
     "@ai-sdk/google-vertex": "latest",
     "@ai-sdk/openai": "latest",
     "@anthropic-ai/sdk": "^0.56.0",
@@ -19,6 +19,7 @@
     "@google-cloud/vertexai": "^1.10.0",
     "@types/dompurify": "^3.0.5",
     "ai": "latest",
+    "axios": "^1.11.0",
     "clsx": "^2.1.1",
     "dompurify": "^3.2.6",
     "firebase-admin": "^13.4.0",
