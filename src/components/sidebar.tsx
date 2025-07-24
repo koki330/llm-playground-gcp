@@ -1,7 +1,7 @@
 'use client';
 
 import { useAppContext, MODEL_GROUPS, ReasoningPreset, TemperaturePreset } from "@/context/AppContext";
-import { FileText, SlidersHorizontal, BrainCircuit, Globe } from 'lucide-react';
+import { FileText, SlidersHorizontal, BrainCircuit, Globe, AlertTriangle } from 'lucide-react';
 
 const supportedFiles = [
   'PDF', 'PNG', 'DOCX', 'XLSX', 'TXT', 'JSON'
@@ -118,6 +118,10 @@ const Sidebar = () => {
                   className="h-4 w-4 rounded border-gray-300 bg-gray-700 text-blue-600 focus:ring-blue-500"
                   disabled={isLoading}
                 />
+              </div>
+              <div className="mt-3 flex items-start gap-2 p-2 text-xs text-red-400 bg-red-900/30 rounded-lg">
+                <AlertTriangle size={24} className="flex-shrink-0" />
+                <span>Web検索機能は公開情報を対象とします。機密情報や個人情報は入力しないでください。</span>
               </div>
             </div>
           )}
