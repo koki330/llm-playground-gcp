@@ -75,6 +75,8 @@ interface AppContextType {
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
   usageInfo: UsageInfo | null;
+  error: string | null;
+  setError: React.Dispatch<React.SetStateAction<string | null>>;
   temperaturePreset: TemperaturePreset;
   setTemperaturePreset: React.Dispatch<React.SetStateAction<TemperaturePreset>>;
   maxTokens: number;
@@ -94,6 +96,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [fileContent, setFileContent] = useState('');
   const [isFileProcessing, setIsFileProcessing] = useState(false);
   const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // New model settings states
   const [temperaturePreset, setTemperaturePreset] = useState<TemperaturePreset>('balanced');
@@ -113,6 +116,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       maxTokens: currentModelConfig?.type === 'normal' ? maxTokens : undefined,
       reasoningPreset: currentModelConfig?.type === 'reasoning' ? reasoningPreset : undefined,
       webSearchEnabled: isWebSearchEnabled,
+    },
+    onError: (err) => {
+      setError(err.message);
     },
     onFinish: () => {
       fetchUsage(selectedModel);
@@ -168,6 +174,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const submitPrompt = async (prompt: string) => {
     if (usageInfo?.isLimited) return;
+    setError(null); // Clear previous errors
     let combinedPrompt = prompt;
     if (fileContent) {
       combinedPrompt = `The user has uploaded a file. Its content is:\n\n${fileContent}\n\n---\n\nUser prompt:\n\n${prompt}`;
@@ -194,6 +201,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         input,
         handleInputChange,
         usageInfo,
+        error,
+        setError,
         temperaturePreset,
         setTemperaturePreset,
         maxTokens,

@@ -180,7 +180,54 @@ export async function POST(req: NextRequest) {
           const result = await streamText({ ...streamTextConfig, model: getAnthropicProvider()(anthropicModelId), system: systemPrompt || 'You are a helpful assistant.' });
           return result.toDataStreamResponse();
       } else if (modelId.startsWith('gemini')) {
-          const result = await streamText({ ...streamTextConfig, model: getGoogleProvider()(modelId) });
+          // --- Gemini Specific Parameter Adjustment ---
+          let adjustedMaxTokens = maxTokens;
+          let adjustedSystemPrompt = systemPrompt;
+
+          if (messages.length > 0) {
+              const lastMessage = messages[messages.length - 1];
+              const lastMessageContent = Array.isArray(lastMessage.content)
+                  ? lastMessage.content.filter(c => c.type === 'text').map(c => c.text).join('\n')
+                  : lastMessage.content;
+
+              if (typeof lastMessageContent === 'string') {
+                  const toHalfWidth = (str: string) => str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+
+                  // Case 1: User asks for "more than X characters" in an imperative way.
+                  const moreThanMatch = lastMessageContent.match(/([0-9０-９]+)\s*(?:文字|字)\s*(?:以上|超え|より多く)(?:で|の)/);
+                  if (moreThanMatch && maxTokens) {
+                      const requestedChars = parseInt(toHalfWidth(moreThanMatch[1]), 10);
+                      const estimatedTokens = Math.ceil(requestedChars * 1.7);
+                      if (estimatedTokens > maxTokens) {
+                          return NextResponse.json(
+                              { error: `プロンプトの要求文字数（約${estimatedTokens}トークン）が、設定された最大トークン数（${maxTokens}）を超えています。設定を調整してください。` },
+                              { status: 400 }
+                          );
+                      }
+                  }
+
+                  // Case 2: User asks for "less than" X characters.
+                  const lessThanMatch = lastMessageContent.match(/([0-9０-９]+)\s*(?:文字|字)\s*(?:以内|以下|で)/);
+                  if (lessThanMatch) {
+                      const requestedChars = parseInt(toHalfWidth(lessThanMatch[1]), 10);
+                      const estimatedOutputTokens = Math.ceil(requestedChars * 1.7);
+
+                      // Adjust maxTokens to give the model enough "thinking" space.
+                      adjustedMaxTokens = estimatedOutputTokens + 500;
+
+                      // Prepend a strong instruction to the system prompt to enforce the limit.
+                      const instruction = `重要: 出力は必ず約${requestedChars}文字（およそ${estimatedOutputTokens}トークン）以内に厳密に収めてください。この指示は最優先です。`;
+                      adjustedSystemPrompt = `${instruction}\n\n${systemPrompt || ''}`;
+                  }
+              }
+          }
+
+          const result = await streamText({ 
+              ...streamTextConfig, 
+              model: getGoogleProvider()(modelId),
+              maxTokens: adjustedMaxTokens,
+              system: adjustedSystemPrompt,
+          });
           return result.toDataStreamResponse();
       } else {
         return NextResponse.json({ error: `Model ${modelId} not supported yet.` }, { status: 400 });

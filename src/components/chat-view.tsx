@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
+import { X } from 'lucide-react';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
@@ -11,7 +12,7 @@ import dynamic from 'next/dynamic';
 const CodeBlock = dynamic(() => import('./code-block'), { ssr: false });
 
 const ChatView = () => {
-  const { messages } = useAppContext();
+  const { messages, error, setError } = useAppContext();
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -65,6 +66,16 @@ const ChatView = () => {
         )}
         <div ref={endOfMessagesRef} />
       </div>
+      {error && (
+        <div className="p-4 border-t border-gray-700 bg-red-900/50 text-red-300">
+          <div className="flex items-center justify-between">
+            <p><span className="font-bold">Error:</span> {error}</p>
+            <button onClick={() => setError(null)} className="p-1 rounded-full hover:bg-red-800/50">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
       <ChatInput />
     </div>
   );
