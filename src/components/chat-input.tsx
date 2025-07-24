@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, FormEvent } from 'react';
+import { useState, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useAppContext, Attachment } from '@/context/AppContext';
 import { Paperclip, X, Send } from 'lucide-react';
 import Textarea from 'react-textarea-autosize';
@@ -17,6 +17,7 @@ const ChatInput = () => {
   } = useAppContext();
   
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,6 +96,20 @@ const ChatInput = () => {
     setAttachments([]);
   };
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isComposing) {
+      return;
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Prevent new line on Enter
+      const form = e.currentTarget.form;
+      if (form) {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="p-4 bg-gray-800 border-t border-gray-700">
       {attachments.length > 0 && (
@@ -128,11 +143,9 @@ const ChatInput = () => {
         <Textarea
           value={input}
           onChange={handleInputChange}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              handleSubmit(e);
-            }
-          }}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={() => setIsComposing(false)}
+          onKeyDown={handleKeyDown}
           placeholder="Message a model, or add a file..."
           className="flex-grow p-2 pr-16 rounded-lg bg-gray-700 text-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           minRows={2}
