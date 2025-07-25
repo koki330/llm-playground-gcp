@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { X } from 'lucide-react';
+import { X, Loader2, FileText } from 'lucide-react';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
@@ -12,7 +12,7 @@ import dynamic from 'next/dynamic';
 const CodeBlock = dynamic(() => import('./code-block'), { ssr: false });
 
 const ChatView = () => {
-  const { messages, error, setError } = useAppContext();
+  const { messages, error, setError, isLoading, isFileProcessing } = useAppContext();
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -63,6 +63,22 @@ const ChatView = () => {
               </div>
             </div>
           ))
+        )}
+        {isFileProcessing && (
+          <div className="flex items-start gap-3 justify-start">
+            <div className="p-3 rounded-lg bg-gray-700 flex items-center space-x-2">
+              <FileText className="h-5 w-5 animate-pulse" />
+              <span className="text-sm">ファイルを処理中です...</span>
+            </div>
+          </div>
+        )}
+        {!isFileProcessing && isLoading && (
+          <div className="flex items-start gap-3 justify-start">
+            <div className="p-3 rounded-lg bg-gray-700 flex items-center space-x-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-sm">回答を生成中です...</span>
+            </div>
+          </div>
         )}
         <div ref={endOfMessagesRef} />
       </div>
