@@ -14,6 +14,11 @@ RUN npm install --frozen-lockfile
 # ソースコードをコピー
 COPY . .
 
+# ビルド引数を受け取る
+ARG NEXT_PUBLIC_ENVIRONMENT
+# 環境変数として設定
+ENV NEXT_PUBLIC_ENVIRONMENT=$NEXT_PUBLIC_ENVIRONMENT
+
 # Next.jsアプリケーションをビルド
 RUN npm run build
 

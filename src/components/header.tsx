@@ -22,6 +22,11 @@ const Header = () => {
     <header className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
       <div className="flex items-center gap-4">
         <h1 className="text-xl font-bold">LLM Playground</h1>
+        {process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging' && (
+          <span className="ml-2 px-2 py-1 text-xs font-semibold text-white bg-yellow-500 rounded-full">
+            検証用
+          </span>
+        )}
         <div className="relative" ref={dropdownRef}>
           <button 
             onClick={() => setIsInfoOpen(!isInfoOpen)}
