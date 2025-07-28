@@ -23,8 +23,11 @@
   - 複数のLLMをUIからシームレスに切り替えて利用可能。
 
 - **動的なモデル設定:**
-  - **通常モデル:** 「回答のスタイル（堅実/標準/創造的）」と「最大トークン数」を動的に設定可能。最大トークン���の上限は、各モデルの仕様に合わせて自動で調整されます。
+  - **通常モデル:** 「回答のスタイル（堅実/標準/創造的）」と「最大トークン数」を動的に設定可能。最大トークン数の上限は、各モデルの仕様に合わせて自動で調整されます。
   - **リーゾニングモデル:** 「リーゾニング精度（Low/Middle/High）」をプリセットから選択可能。
+
+- **Web検索連携:**
+  - `o3` モデルでは、リアルタイムのWeb検索結果を基に回答を生成する機能が利用可能です。機密情報を含まない公開情報の検索・要約に活用できます。
 
 - **ファイルアップロードとテキスト抽出:**
   - 様々な形式のファイルをアップロードし、その内容をプロンプトに含めることができます。
@@ -32,114 +35,99 @@
   - **処理方法:** Google Cloud Document AI (OCR) や各種ライブラリを用いて、ファイル内容をテキストに変換します。
 
 - **利用料金トラッキングと上限設定:**
-  - モデルごとのAPI利用料金をトークン数に基づいて自動で計算し、Firestoreに記録します。
-  - 特定のモデルに対して月間の利用料金上限を設定できます。（現在は `Claude Sonnet 4` と `o3` に設定済み）
+  - モデルごとのAPI利用料���をトークン数に基づいて自動で計算し、Firestoreに記録します。
+  - 特定のモデルに対して月間の利用料金上限を設定できます。
   - **UIへの警告表示:** モデル選択時、利用料金が上限の8割に達している場合は警告を表示し、上限に達したモデルは自動的に選択不可になります。
 
 - **IPアドレスによるアクセス制限:**
   - 環境変数で指定されたIPアドレスからのアクセスのみを許可する、堅牢なセキュリティ機能を備えています。
 
-## ����️ システム構成
-
-### アーキテクチャ
-
-- **フレームワーク:** [Next.js](https://nextjs.org/) (App Router)
-- **言語:** [TypeScript](https://www.typescriptlang.org/)
-- **UI:** [React](https://reactjs.org/), [Tailwind CSS](https://tailwindcss.com/)
-- **状態管理 (フロントエンド):** [Vercel AI SDK (`useChat`)](https://sdk.vercel.ai/)
-- **バックエンド API:** Next.js API Routes
-- **クラウドサービス:**
-  - **デプロイ先:** Google Cloud Run
-  - **CI/CD:** Google Cloud Build
-  - **コンテナレジストリ:** Google Artifact Registry
-  - **ファイルストレージ:** Google Cloud Storage
-  - **OCR:** Google Cloud Document AI
-  - **データベース:** Google Cloud Firestore (料金追跡用)
-  - **シークレット管理:** Google Secret Manager
-
-### ディレクトリ構成の概要
-
-```
-llm-playground-gcp/
-├── src/
-│   ├── app/                # Next.js App Router
-│   │   ├── page.tsx        # メインページのUI
-│   │   └── api/            # バックエンドAPIルート
-│   │       ├── chat/       # AIとの対話処理
-│   │       ├── extract-text/ # ファイルからのテキスト抽出処理
-│   │       └── get-usage/    # 利用料金取得API
-│   ├── components/         # Reactコンポーネント (UI部���)
-│   ├── context/            # アプリケーションの状態管理 (AppContext)
-│   ├── hooks/              # カスタムフック (useOnClickOutside)
-│   ├── services/           # 外部サービス連携 (OpenAI, Anthropic, VertexAIなど)
-│   └── config/             # アプリケーション設定 (料金など)
-├── cloudbuild.yaml         # Cloud Build の設定ファイル
-├── Dockerfile              # コンテナイメージの定義ファイル
-└── package.json            # プロジェクト情報と依存関係
-```
-
-## 🚀 セットアップとローカルでの実行
-
-### 前提条件
-
-- Node.js (v18.x 以上を推奨)
-- Google Cloud SDK (gcloud CLI)
-- Google Cloud プロジェクトと、各種APIが有効化された環境
-
-### 環境変数
-
-プロジェクトのルートに `.env.local` ファイルを作成し、以下の環境変数を設定します。これらの値の多くは、本番環境ではGoogle Secret Managerから注入されます。
-
-```bash
-# --- Google Cloud Settings --- 
-# サービスアカウントキーのJSON文字列 (ローカル開発用)
-LLM_GCP_VERTEX_AI_SERVICE_ACCOUNT_JSON='{"type": "service_account", ...}'
-
-# 各種Google Cloudリソースの名前
-LLM_GCP_GOOGLE_CLOUD_PROJECT_ID="your-gcp-project-id"
-LLM_GCP_GOOGLE_CLOUD_LOCATION="your-gcp-region" #例: asia-northeast1
-LLM_GCP_GCS_BUCKET_NAME="your-gcs-bucket-name"
-LLM_GCP_DOCAI_PROCESSOR_NAME="projects/your-gcp-project-id/locations/us/processors/your-processor-id"
-
-# --- API Keys --- 
-LLM_GCP_ANTHROPIC_API_KEY="sk-ant-..."
-LLM_GCP_OPENAI_API_KEY="sk-..."
-
-# --- Security --- 
-# 許可するIPアドレス (カンマ区切り)
-LLM_GCP_ALLOWED_IPS="127.0.0.1,::1"
-```
-
-### インストールと起動
-
-1.  **依存関係のインストール:**
-    ```bash
-    npm install
-    ```
-
-2.  **開発サーバーの起動:**
-    ```bash
-    npm run dev
-    ```
-
-アプリケーションが [http://localhost:3000](http://localhost:3000) で利用可能になります。
-
 ## ⚙️ 設定のカスタマイズ
 
-### モデルの追加・設定変更
+モデルの定義、料金、利用上限額などの設定は、すべて `src/config/models.json` ファイルで一元管理されています。新しいモデルの追加や既存モデルの設定変更は、このファイルを編集するだけで完了します。
 
-モデルの定義は `src/context/AppContext.tsx` 内の `MODEL_GROUPS` と `MODEL_CONFIG` で一元管理されています。
+### `models.json` の構造
 
-- **モデルの表示名やグループ化:** `MODEL_GROUPS` を編集します。
-- **モデルの種別や最大トークン数:** `MODEL_CONFIG` を編集します。
+このJSONファイルは、4つの主要なキーで構成されています。
 
-### 利用料金と上限の変更
+```json
+{
+  "modelGroups": [],
+  "modelConfig": {},
+  "monthlyLimitsUSD": {},
+  "pricingPerMillionTokensUSD": {}
+}
+```
 
-- **トークンあたりの料金:** `src/config/pricing.ts` の `PRICING_PER_MILLION_TOKENS_USD` を編集します。
-- **モデルごとの月間上限額:** 以下の**2つ**のファイルを両方修正する必要があり���す。
-  1.  `src/app/api/chat/route.ts`
-  2.  `src/app/api/get-usage/route.ts`
-  - 両ファイル内の `MONTHLY_LIMITS_USD` オブジェクトを編集してください。
+#### 1. `modelGroups`
+
+UIのモデル選択ドロップダウンに表示されるモデルのリストとグループを定義します。
+
+- `label`: プロバイダー名など、グループの見出しとして表示され���文字列。
+- `models`: グループに所属するモデルを定義するオブジェクト。
+  - **キー (例: `"GPT-4.1"`)**: UIに表示されるモデル名。
+  - **値 (例: `"gpt-4.1"`)**: アプリケーション内部で使われる一意のモデルID。
+
+#### 2. `modelConfig`
+
+各モデルの具体的な挙動と設定を定義します。キーには `modelGroups` で定義したモデルIDを使用します。
+
+- `type`: モデルの種別を `"normal"` または `"reasoning"` で指定します。これにより、UIに表示される設定項目が切り替わります。
+- `maxTokens`: そのモデルが受け付ける最大のトークン数。UIのスライダーの最大値として使用されます。
+
+#### 3. `monthlyLimitsUSD`
+
+特定のモデルに対する月間の利用料金（USD）の上限を設定します。ここにモデルIDと上限額を記述すると、自動で利用状況が監視されます。
+
+- **キー**: 上限を設定したいモデルのID。
+- **値**: 上限とする料金（数値）。
+
+#### 4. `pricingPerMillionTokensUSD`
+
+各モデルの100万トークンあたりの料金を定義します。従量課金の計算に利用されます。
+
+- **キー**: 料金を設定するモデルのID。
+- **値**: `input` (入力トークン単価) と `output` (出力トークン単価) を持つオブジェクト。
+
+### 新しいモデルの追加手順
+
+例として、新しい `GPT-X` というモデルを追加する場合の手順を以下に示します。
+
+1.  **`modelGroups` に追加:**
+    `"OpenAI"` グループに、表示名 `"GPT-X"` とモデルID `"gpt-x"` を追加します。
+    ```json
+    {
+      "label": "OpenAI",
+      "models": {
+        "GPT-4.1": "gpt-4.1",
+        // ... 既存のモデル ...
+        "GPT-X": "gpt-x" // <-- ここに追加
+      }
+    }
+    ```
+
+2.  **`modelConfig` に追加:**
+    モデルID `"gpt-x"` の設定（種別と最大トークン数）を定義します。
+    ```json
+    "modelConfig": {
+      // ... 既存のモデル設定 ...
+      "gpt-x": { "type": "normal", "maxTokens": 128000 } // <-- ここに追加
+    }
+    ```
+
+3.  **`pricingPerMillionTokensUSD` に追加:**
+    モデルID `"gpt-x"` の料金を定義します。
+    ```json
+    "pricingPerMillionTokensUSD": {
+      // ... 既存のモデル料金 ...
+      "gpt-x": { "input": 10, "output": 30 } // <-- ここに追加
+    }
+    ```
+
+4.  **(任意) `monthlyLimitsUSD` に追加:**
+    もしこのモデルに利用上限を設ける場合は、IDと上限額を追記します。
+
+以上の4ステップで、コードを一切��更することなく、新しいモデルをアプリケーションに統合できます。
 
 ## ☁️ デプロイ
 
