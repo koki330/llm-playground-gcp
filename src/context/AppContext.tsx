@@ -14,43 +14,11 @@ export interface Attachment {
 export type ReasoningPreset = 'low' | 'middle' | 'high';
 export type TemperaturePreset = 'precise' | 'balanced' | 'creative';
 
-export const MODEL_CONFIG: { [key: string]: { type: 'reasoning' | 'normal', maxTokens: number } } = {
-  'claude-sonnet4': { type: 'normal', maxTokens: 64000 },
-  'gpt-4.1': { type: 'normal', maxTokens: 32768 },
-  'gpt-4.1-mini': { type: 'normal', maxTokens: 32768 },
-  'gpt-4.1-nano': { type: 'normal', maxTokens: 32768 },
-  'o3': { type: 'reasoning', maxTokens: 100000 },
-  'o4-mini': { type: 'reasoning', maxTokens: 100000 },
-  'gemini-2.5-pro': { type: 'normal', maxTokens: 65536 },
-  'gemini-2.5-flash': { type: 'normal', maxTokens: 65536 },
-};
-
-export const MODEL_GROUPS = [
-  {
-    label: "Anthropic",
-    models: {
-      'Claude Sonnet 4': 'claude-sonnet4',
-    }
-  },
-  {
-    label: "OpenAI",
-    models: {
-      'GPT-4.1': 'gpt-4.1',
-      'GPT-4.1-mini': 'gpt-4.1-mini',
-      'GPT-4.1-nano': 'gpt-4.1-nano',
-      'O3': 'o3',
-      'O4-mini': 'o4-mini',
-    }
-  }
-  ,
-  {
-    label: "Gemini",
-    models: {
-      'Gemini 2.5 Pro': 'gemini-2.5-pro',
-      'Gemini 2.5 Flash': 'gemini-2.5-flash',
-    }
-  }
-];
+// Type for the configuration data fetched from the API
+interface ModelConfigData {
+  modelGroups: { label: string; models: Record<string, string> }[];
+  modelConfig: Record<string, { type: 'reasoning' | 'normal'; maxTokens: number }>;
+}
 
 interface UsageInfo {
   limit: number | null;
@@ -64,6 +32,7 @@ interface AppContextType {
   selectedModel: string;
   setSelectedModel: React.Dispatch<React.SetStateAction<string>>;
   isLoading: boolean;
+  isConfigLoading: boolean; // To track config loading
   isFileProcessing: boolean;
   setIsFileProcessing: React.Dispatch<React.SetStateAction<boolean>>;
   systemPrompt: string;
@@ -86,32 +55,67 @@ interface AppContextType {
   currentModelConfig: { type: 'reasoning' | 'normal', maxTokens: number } | undefined;
   isWebSearchEnabled: boolean;
   setIsWebSearchEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  modelGroups: { label: string; models: Record<string, string> }[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [selectedModel, setSelectedModel] = useState('gpt-4.1');
+  const [modelConfigData, setModelConfigData] = useState<ModelConfigData | null>(null);
+  const [isConfigLoading, setIsConfigLoading] = useState(true);
+  const [selectedModel, setSelectedModel] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [fileContent, setFileContent] = useState('');
   const [isFileProcessing, setIsFileProcessing] = useState(false);
   const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // New model settings states
   const [temperaturePreset, setTemperaturePreset] = useState<TemperaturePreset>('balanced');
   const [maxTokens, setMaxTokens] = useState(4096);
   const [reasoningPreset, setReasoningPreset] = useState<ReasoningPreset>('middle');
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
 
-  const currentModelConfig = MODEL_CONFIG[selectedModel];
+  const currentModelConfig = modelConfigData?.modelConfig[selectedModel];
+  const modelGroups = modelConfigData?.modelGroups || [];
+
+  useEffect(() => {
+    const fetchModelConfig = async () => {
+      setIsConfigLoading(true);
+      try {
+        const response = await fetch('/api/get-models-config');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch model configuration: ${response.statusText}`);
+        }
+        const data: ModelConfigData = await response.json();
+        setModelConfigData(data);
+
+        // Set 'gpt-4.1' as the default model if it exists, otherwise fall back to the first available model.
+        const gpt41Exists = data.modelGroups.some(group => 
+          Object.values(group.models).includes('gpt-4.1')
+        );
+
+        if (gpt41Exists) {
+          setSelectedModel('gpt-4.1');
+        } else if (data.modelGroups.length > 0 && data.modelGroups[0].models) {
+          const firstModelId = Object.values(data.modelGroups[0].models)[0];
+          if (firstModelId) {
+            setSelectedModel(firstModelId);
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error fetching config');
+      } finally {
+        setIsConfigLoading(false);
+      }
+    };
+    fetchModelConfig();
+  }, []);
 
   const { messages, append, isLoading, input, setInput, setMessages } = useChat({
     api: '/api/chat',
     body: {
       modelId: selectedModel,
       systemPrompt: systemPrompt,
-      // Pass settings to the backend
       temperaturePreset: currentModelConfig?.type === 'normal' ? temperaturePreset : undefined,
       maxTokens: currentModelConfig?.type === 'normal' ? maxTokens : undefined,
       reasoningPreset: currentModelConfig?.type === 'reasoning' ? reasoningPreset : undefined,
@@ -121,7 +125,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setError(err.message);
     },
     onFinish: () => {
-      fetchUsage(selectedModel);
+      if (selectedModel) fetchUsage(selectedModel);
     }
   });
 
@@ -151,17 +155,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    if (selectedModel) {
+    if (selectedModel && modelConfigData) {
       fetchUsage(selectedModel);
-      // Reset web search on model change
       setIsWebSearchEnabled(false);
-      // Update maxTokens based on the selected model's config
-      const newMax = MODEL_CONFIG[selectedModel]?.maxTokens;
+      const newMax = modelConfigData.modelConfig[selectedModel]?.maxTokens;
       if (newMax) {
         setMaxTokens(newMax);
       }
     }
-  }, [selectedModel]);
+  }, [selectedModel, modelConfigData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -173,8 +175,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const submitPrompt = async (prompt: string) => {
-    if (usageInfo?.isLimited) return;
-    setError(null); // Clear previous errors
+    if (usageInfo?.isLimited || !selectedModel) return;
+    setError(null);
     let combinedPrompt = prompt;
     if (fileContent) {
       combinedPrompt = `The user has uploaded a file. Its content is:\n\n${fileContent}\n\n---\n\nUser prompt:\n\n${prompt}`;
@@ -190,6 +192,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         selectedModel, 
         setSelectedModel, 
         isLoading: isLoading || isFileProcessing,
+        isConfigLoading,
         isFileProcessing, 
         setIsFileProcessing,
         systemPrompt, 
@@ -212,6 +215,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         currentModelConfig,
         isWebSearchEnabled,
         setIsWebSearchEnabled,
+        modelGroups,
     }}>
       {children}
     </AppContext.Provider>

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
-import { getPricing } from '@/config/pricing';
+import { getModelsConfig } from '@/config/modelConfig';
 
 // This is the same usage tracking logic from the chat API.
 const usageTracker = {
@@ -10,7 +10,8 @@ const usageTracker = {
     updateUsage: async (modelId: string, inputTokens?: number, outputTokens?: number) => {
         const safeInputTokens = inputTokens || 0;
         const safeOutputTokens = outputTokens || 0;
-        const pricing = getPricing(modelId);
+                                                const { pricingPerMillionTokensUSD } = await getModelsConfig();
+        const pricing = pricingPerMillionTokensUSD[modelId];
         if (!pricing) {
           throw new Error(`No pricing info for model ${modelId}.`);
         }

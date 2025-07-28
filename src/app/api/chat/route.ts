@@ -5,7 +5,7 @@ import { getAnthropicProvider } from '@/services/anthropic';
 import { getGoogleProvider } from '@/services/vertexai';
 import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
-import { getPricing } from '@/config/pricing';
+import { getModelsConfig } from '@/config/modelConfig';
 import { get_encoding } from 'tiktoken';
 import { z } from 'zod';
 import { searchOnGoogle, SearchResult } from '@/services/googleSearch';
@@ -20,10 +20,7 @@ interface ChatRequestBody {
   webSearchEnabled?: boolean;
 }
 
-const MONTHLY_LIMITS_USD: { [key: string]: number } = {
-  'claude-sonnet4': 120,
-  'o3': 300,
-};
+
 
 const TEMP_PRESET_MAP: { [key: string]: number } = {
   precise: 0.2,
@@ -58,10 +55,9 @@ const usageTracker = {
       }
       return doc.data() as { total_cost: number; year_month: string };
     },
-    updateUsage: async (modelId: string, inputTokens?: number, outputTokens?: number) => {
-        const safeInputTokens = inputTokens || 0;
+        updateUsage: async (modelId: string, inputTokens: number = 0, outputTokens: number = 0, pricing: { input: number; output: number }) => {
+                const safeInputTokens = inputTokens || 0;
         const safeOutputTokens = outputTokens || 0;
-        const pricing = getPricing(modelId);
         if (!pricing) {
           console.warn(`No pricing info for model ${modelId}. Skipping usage update.`);
           return;
@@ -96,7 +92,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'messages and modelId are required' }, { status: 400 });
     }
 
-    const limit = MONTHLY_LIMITS_USD[modelId];
+                                    const { monthlyLimitsUSD, pricingPerMillionTokensUSD } = await getModelsConfig();
+
+    const limit = monthlyLimitsUSD[modelId];
     if (limit) {
       const usage = await usageTracker.getUsage(modelId);
       if (usage.total_cost >= limit) {
@@ -118,7 +116,12 @@ export async function POST(req: NextRequest) {
                 promptTokens = usage.promptTokens;
                 completionTokens = usage.completionTokens;
             }
-            await usageTracker.updateUsage(modelId, promptTokens, completionTokens);
+                        const pricing = pricingPerMillionTokensUSD[modelId];
+            if (!pricing) {
+                console.warn(`No pricing info for model ${modelId}. Skipping usage update.`);
+                return;
+            }
+            await usageTracker.updateUsage(modelId, promptTokens, completionTokens, pricing);
         } catch (error) {
             console.error(`[FATAL ERROR] An unexpected error occurred inside onFinish for ${modelId}:`, error);
         }

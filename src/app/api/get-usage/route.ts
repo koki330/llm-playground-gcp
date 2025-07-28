@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { firestore } from '@/services/firestore';
-
-const MONTHLY_LIMITS_USD: { [key: string]: number } = {
-  'claude-sonnet4': 120,
-  'o3': 300,
-};
+import { getModelsConfig } from '@/config/modelConfig';
 
 async function getUsage(modelId: string) {
   const docRef = firestore.collection('usage_tracking').doc(modelId);
@@ -26,8 +22,9 @@ export async function GET(req: Request) {
   }
 
   try {
+            const { monthlyLimitsUSD } = await getModelsConfig();
     const usage = await getUsage(modelId);
-    const limit = MONTHLY_LIMITS_USD[modelId];
+    const limit = monthlyLimitsUSD[modelId];
 
     return NextResponse.json({ 
       total_cost: usage.total_cost,
