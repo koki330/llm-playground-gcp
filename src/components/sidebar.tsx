@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useAppContext, ReasoningPreset, TemperaturePreset } from "@/context/AppContext";
 import { FileText, SlidersHorizontal, BrainCircuit, Globe, AlertTriangle } from 'lucide-react';
 
@@ -23,24 +24,44 @@ const Sidebar = () => {
     reasoningPreset,
     setReasoningPreset,
     currentModelConfig,
-            isConfigLoading, // <-- Get the new loading state
+    isConfigLoading,
     isWebSearchEnabled,
     setIsWebSearchEnabled,
     modelGroups,
   } = useAppContext();
 
+  const MIN_GEMINI_TOKENS = 1000;
+
+  // Adjust maxTokens only when the selected model changes
+  useEffect(() => {
+    if (selectedModel.startsWith('gemini') && maxTokens < MIN_GEMINI_TOKENS) {
+      setMaxTokens(MIN_GEMINI_TOKENS);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel]);
+
   const handleMaxTokensChange = (value: string) => {
     const num = parseInt(value, 10);
     if (isNaN(num)) {
-      setMaxTokens(0); // Set to 0 or a min value if input is invalid
+      setMaxTokens(0);
     } else if (currentModelConfig && num > currentModelConfig.maxTokens) {
-      setMaxTokens(currentModelConfig.maxTokens); // Cap at the model's max
+      setMaxTokens(currentModelConfig.maxTokens);
     } else {
       setMaxTokens(num);
     }
   };
 
-    const renderModelSettings = () => {
+  // On losing focus, validate the input for Gemini models
+  const handleTokenInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (selectedModel.startsWith('gemini')) {
+      const num = parseInt(e.target.value, 10);
+      if (!isNaN(num) && num < MIN_GEMINI_TOKENS) {
+        setMaxTokens(MIN_GEMINI_TOKENS);
+      }
+    }
+  };
+
+  const renderModelSettings = () => {
     if (isConfigLoading || !currentModelConfig) {
       return (
         <div className="text-sm text-gray-400">モデル設定を読み込み中...</div>
@@ -48,6 +69,8 @@ const Sidebar = () => {
     }
 
     if (currentModelConfig.type === 'normal') {
+      const minTokens = selectedModel.startsWith('gemini') ? MIN_GEMINI_TOKENS : 0;
+
       return (
         <div className="space-y-4">
           <div>
@@ -69,7 +92,7 @@ const Sidebar = () => {
             <input
               id="maxTokensRange"
               type="range"
-              min="0"
+              min={minTokens}
               max={currentModelConfig.maxTokens}
               step="128"
               value={maxTokens}
@@ -80,8 +103,11 @@ const Sidebar = () => {
              <input
               id="maxTokensNumber"
               type="number"
+              min={minTokens}
+              max={currentModelConfig.maxTokens}
               value={maxTokens}
               onChange={(e) => handleMaxTokensChange(e.target.value)}
+              onBlur={handleTokenInputBlur}
               className="w-full p-2 mt-2 bg-gray-700 rounded-md"
               disabled={isLoading}
             />

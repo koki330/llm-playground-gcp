@@ -225,6 +225,12 @@ export async function POST(req: NextRequest) {
               }
           }
 
+          // Safety Guard: Prevent empty responses by ensuring a minimum token count for Gemini.
+          const MINIMUM_GEMINI_TOKENS = 1000;
+          if (adjustedMaxTokens && adjustedMaxTokens < MINIMUM_GEMINI_TOKENS) {
+            adjustedMaxTokens = MINIMUM_GEMINI_TOKENS;
+          }
+
           const result = await streamText({ 
               ...streamTextConfig, 
               model: getGoogleProvider()(modelId),
