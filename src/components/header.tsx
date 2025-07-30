@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Trash2, Info } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Trash2, Info, History } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import { useOnClickOutside } from '@/hooks/useOnClickOutside';
+import ReleaseNotesModal from './ReleaseNotesModal';
+import { ReleaseNote } from '@/app/api/get-release-notes/route';
 
 const modelInfoLinks = [
   { name: 'OpenAI', url: 'https://platform.openai.com/docs/overview' },
@@ -14,9 +16,28 @@ const modelInfoLinks = [
 const Header = () => {
   const { clearConversation } = useAppContext();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
+  const [releaseNotes, setReleaseNotes] = useState<ReleaseNote[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useOnClickOutside(dropdownRef, () => setIsInfoOpen(false));
+
+  useEffect(() => {
+    const fetchReleaseNotes = async () => {
+      try {
+        const response = await fetch('/api/get-release-notes');
+        const data = await response.json();
+        if (response.ok) {
+          setReleaseNotes(data);
+        } else {
+          setReleaseNotes([{ date: 'Error', content: 'アップデート情報の読み込みに失敗しました。' }]);
+        }
+      } catch {
+        setReleaseNotes([{ date: 'Error', content: 'アップデート情報の読み込み中にエラーが発生しました。' }]);
+      }
+    };
+    fetchReleaseNotes();
+  }, []);
 
   return (
     <header className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
@@ -55,6 +76,14 @@ const Header = () => {
             </div>
           )}
         </div>
+        <button 
+          onClick={() => setIsReleaseNotesOpen(true)}
+          className="p-2 rounded-md hover:bg-gray-700 text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+          title="Update Information"
+        >
+          <History size={18} />
+          <span>アップデート情報</span>
+        </button>
       </div>
       <div>
         <button 
@@ -65,6 +94,12 @@ const Header = () => {
           <Trash2 size={20} />
         </button>
       </div>
+      {isReleaseNotesOpen && (
+        <ReleaseNotesModal 
+          releaseNotes={releaseNotes} 
+          onClose={() => setIsReleaseNotesOpen(false)} 
+        />
+      )}
     </header>
   );
 };
