@@ -135,29 +135,32 @@ export async function POST(req: NextRequest) {
     }
 
     if (modelId === 'o3' && webSearchEnabled) {
-      // Step 1: Generate a search query from the user's last message.
-      const lastMessage = messages[messages.length - 1];
+      // Step 1: Generate a search query based on the entire conversation history.
+      const conversationHistory = messages.map(m => `${m.role}: ${Array.isArray(m.content) ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : m.content}`).join('\n');
       const { object: { query } } = await generateObject({
-        model: getOpenAIProvider()(modelId),
+        model: getOpenAIProvider()('gpt-4.1-mini'), // Use a fast model for query generation
         schema: z.object({
-          query: z.string().describe('A concise and effective search query based on the user prompt.'),
+          query: z.string().describe('A concise and effective search query based on the conversation history to answer the latest user prompt.'),
         }),
-        prompt: `Based on the following user prompt, what is the most relevant and effective search query to find up-to-date information? User Prompt: \"${lastMessage.content}\"`,
+        prompt: `Based on the following conversation history, generate the most relevant and effective search query to find up-to-date information for the LATEST user prompt. Focus only on what's needed for the last user message.\n\n--- CONVERSATION HISTORY ---\n${conversationHistory}\n--- END HISTORY ---`,
       });
 
-      // Step 2: Perform the web search.
-      const searchResults = await searchOnGoogle(query);
+      // Step 2: Perform the web search, if a query was generated.
+      let searchResults: SearchResult[] = [];
+      if (query && query.trim() !== '') {
+        searchResults = await searchOnGoogle(query);
+      }
       
-      // Step 3: Generate the final answer based on the search results and user's persona.
+      // Step 3: Generate the final answer based on the conversation history and search results.
       const persona = systemPrompt ? `${systemPrompt}\n\n---\n\n` : '';
-      const researchInstructions = `You are an expert research assistant. Your goal is to provide a comprehensive, well-structured answer to the user's question based *only* on the provided search results. \n\nINSTRUCTIONS:\n1. Synthesize the information from the search results to formulate a single, coherent answer.\n2. Do not mention that you are using search results (e.g., \"According to the search results...\"). Act as if you know the information innately.\n3. At the end of your answer, create a new section titled \"参考資料\".\n4. In this section, list the titles of the web pages you used to formulate your answer, and make each title a hyperlink to its corresponding URL using Markdown format.\n   Example:\n   ### 参考資料\n   - [東京の天気 - ウェザーニュース](https://weathernews.jp/onebox/tenki/tokyo/)\n   - [東京都の天気 - 日本気象協会 tenki.jp](https://tenki.jp/forecast/3/16/)\n5. If the search results are empty or do not contain relevant information, simply state: \"申し訳ありませんが、関連情報を見つけることができませんでした。\"\n\nSEARCH RESULTS (for your reference only):\n---\n${searchResults.map((item: SearchResult, index: number) => `[${index + 1}] Title: ${item.title}\nSnippet: ${item.snippet}\nURL: ${item.link}`).join('\n\n') || 'No results found.'}\n---\n`;
+      const researchInstructions = `You are an expert research assistant. Your goal is to provide a comprehensive, well-structured answer to the user's latest question, seamlessly integrating information from the conversation history and the provided real-time search results.\n\nINSTRUCTIONS:\n1.  Carefully review the entire CONVERSATION HISTORY to understand the full context of the user's request.\n2.  Use the provided SEARCH RESULTS to find the most current and relevant information to answer the user's LATEST prompt.\n3.  Synthesize information from both the conversation and the search results into a single, coherent, and natural-sounding answer.\n4.  Do not explicitly mention that you are using search results (e.g., "According to the search results..."). Act as if you know the information innately.\n5.  If the search results are relevant, create a new section titled "参考資料" at the very end of your answer.\n6.  In this section, list the titles of the web pages you used, and make each title a hyperlink to its URL using Markdown format.\n    Example:\n    ### 参考資料\n    - [東京の天気 - ウェザーニュース](https://weathernews.jp/onebox/tenki/tokyo/)\n7.  If the search results are empty or do not contain relevant information to the user's latest question, answer based on the conversation history alone and omit the "参考資料" section. If you cannot answer, say so politely.\n\nSEARCH RESULTS (for your reference only):\n---\n${searchResults.map((item: SearchResult, index: number) => `[${index + 1}] Title: ${item.title}\nSnippet: ${item.snippet}\nURL: ${item.link}`).join('\n\n') || 'No relevant results found.'}\n---\n`;
 
       const finalSystemPrompt = `${persona}${researchInstructions}`;
 
       const result = await streamText({
-        messages: messages,
+        messages: messages, // Pass the full conversation history
         system: finalSystemPrompt,
-        model: getOpenAIProvider()(modelId),
+        model: getOpenAIProvider()(modelId), // Use the selected o3 model for the final answer
         temperature: finalTemperature,
         maxTokens: maxTokens,
         onFinish: onFinishCallback,
