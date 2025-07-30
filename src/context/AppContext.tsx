@@ -43,6 +43,7 @@ interface AppContextType {
   clearConversation: () => void;
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
+  stopGeneration: () => void;
   usageInfo: UsageInfo | null;
   error: string | null;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
@@ -111,7 +112,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     fetchModelConfig();
   }, []);
 
-  const { messages, append, isLoading, input, setInput, setMessages } = useChat({
+  const { messages, append, isLoading, input, setInput, setMessages, stop } = useChat({
     api: '/api/chat',
     body: {
       modelId: selectedModel,
@@ -203,6 +204,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         clearConversation,
         input,
         handleInputChange,
+        stopGeneration: stop,
         usageInfo,
         error,
         setError,

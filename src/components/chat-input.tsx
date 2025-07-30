@@ -2,7 +2,7 @@
 
 import { useState, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useAppContext, Attachment } from '@/context/AppContext';
-import { Paperclip, X, Send } from 'lucide-react';
+import { Paperclip, X, Send, Square } from 'lucide-react';
 import Textarea from 'react-textarea-autosize';
 
 const ChatInput = () => {
@@ -13,7 +13,8 @@ const ChatInput = () => {
     setIsFileProcessing, 
     input, 
     handleInputChange, 
-    setFileContent
+    setFileContent,
+    stopGeneration
   } = useAppContext();
   
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -152,13 +153,24 @@ const ChatInput = () => {
           maxRows={20}
           disabled={isLoading || isFileProcessing}
         />
-        <button 
-          type="submit"
-          className="absolute right-3 bottom-3 p-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          disabled={(!input.trim() && attachments.length === 0) || isLoading || isFileProcessing}
-        >
-          <Send size={20} />
-        </button>
+        {isLoading ? (
+          <button 
+            type="button"
+            onClick={stopGeneration}
+            title="回答停止"
+            className="absolute right-3 bottom-3 p-2 rounded-lg bg-gray-600 hover:bg-gray-700 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
+          >
+            <Square size={20} />
+          </button>
+        ) : (
+          <button 
+            type="submit"
+            className="absolute right-3 bottom-3 p-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            disabled={(!input.trim() && attachments.length === 0) || isFileProcessing}
+          >
+            <Send size={20} />
+          </button>
+        )}
       </div>
     </form>
   );
