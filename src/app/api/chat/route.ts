@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
       const finalSystemPrompt = `${persona}${researchInstructions}`;
 
       const result = await streamText({
-        messages: [lastMessage],
+        messages: messages,
         system: finalSystemPrompt,
         model: getOpenAIProvider()(modelId),
         temperature: finalTemperature,
