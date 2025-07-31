@@ -33,8 +33,10 @@
 
 - **ファイルアップロードとテキスト抽出:**
   - 様々な形式のファイルをアップロードし、その内容をプロンプトに含めることができます。
-  - **対応ファイル:** PDF, PNG, Word (.docx), Excel (.xlsx), テキスト (.txt), JSON (.json)
-  - **処理方法:** Google Cloud Document AI (OCR) や各種ライブラリを用いて、ファイル内容をテキストに変換します。
+  - **対応ファイル:** 
+  PDF, PNG, Word (.docx), Excel (.xlsx), テキスト (.txt), JSON (.json)
+  - **処理方法:** 
+  Google Cloud Document AI (OCR) や各種ライブラリを用いて、ファイル内容をテキストに変換します。
 
 - **利用料金トラッキングと上限設定:**
   - モデルごとのAPI利用料���をトークン数に基づいて自動で計算し、Firestoreに記録します。

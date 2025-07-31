@@ -1,76 +1,94 @@
 'use client';
 
-import { useState, useRef, FormEvent, KeyboardEvent } from 'react';
+import { useState, useRef, FormEvent, KeyboardEvent, useEffect } from 'react'; // Import useEffect
 import { useAppContext, Attachment } from '@/context/AppContext';
 import { Paperclip, X, Send, Square } from 'lucide-react';
 import Textarea from 'react-textarea-autosize';
 
 const ChatInput = () => {
-  const { 
-    submitPrompt, 
-    isLoading, 
-    isFileProcessing, 
-    setIsFileProcessing, 
-    input, 
-    handleInputChange, 
+  const {
+    submitPrompt,
+    isLoading,
+    isFileProcessing,
+    setIsFileProcessing,
+    input,
+    handleInputChange,
     setFileContent,
-    stopGeneration
+    setImageUri, // Get the new setter from context
+    stopGeneration,
   } = useAppContext();
+
+  // --- DEBUG LOG --- 
+  useEffect(() => {
+    console.log(`[DEBUG_UI] isLoading: ${isLoading}, isFileProcessing: ${isFileProcessing}`);
+  }, [isLoading, isFileProcessing]);
+  // --- END DEBUG LOG ---
   
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const file = e.target.files[0];
-      if (!file) return;
+    if (!e.target.files || e.target.files.length === 0) return;
 
-      setAttachments([]);
-      setFileContent('');
-      setIsFileProcessing(true);
+    const file = e.target.files[0];
+    setAttachments([]);
+    setFileContent('');
+    setImageUri(''); // Reset image URI
+    setIsFileProcessing(true);
 
-      try {
-        const signedUrlResponse = await fetch('/api/generate-upload-url', {
+    try {
+      const signedUrlResponse = await fetch('/api/generate-upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type }),
+      });
+      if (!signedUrlResponse.ok) throw new Error('Failed to get signed URL.');
+        const { uploadUrl, gcsUri } = await signedUrlResponse.json();
+        console.log('[DEBUG] GCS URI obtained:', gcsUri); // <-- Add this line
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!uploadResponse.ok) throw new Error('Failed to upload file to GCS.');
+
+      const newAttachment: Attachment = {
+        name: file.name,
+        type: file.type,
+        gcsUri: gcsUri,
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+      };
+      setAttachments([newAttachment]);
+
+      if (file.type.startsWith('image/')) {
+        // --- For images, just set the GCS URI and we are done ---
+        setImageUri(gcsUri);
+        setIsFileProcessing(false);
+      } else {
+        // --- For other files, continue to extract text ---
+        const extractResponse = await fetch('/api/extract-text', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: file.name, contentType: file.type }),
-        });
-        if (!signedUrlResponse.ok) throw new Error('Failed to get signed URL.');
-        const { uploadUrl, gcsUri } = await signedUrlResponse.json();
-
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type },
-          body: file,
-        });
-        if (!uploadResponse.ok) throw new Error('Failed to upload file to GCS.');
-
-        const newAttachment: Attachment = {
-            name: file.name,
-            type: file.type,
-            gcsUri: gcsUri,
-            previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
-        };
-        setAttachments([newAttachment]);
-
-        const extractResponse = await fetch('/api/extract-text', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gcsUri, contentType: file.type }),
+          body: JSON.stringify({ gcsUri, contentType: file.type }),
         });
         if (!extractResponse.ok) {
-            const errorData = await extractResponse.json();
-            throw new Error(errorData.error || 'Failed to extract text.');
+          const errorData = await extractResponse.json();
+          throw new Error(errorData.error || 'Failed to extract text.');
         }
         const { text } = await extractResponse.json();
         setFileContent(text);
-
-      } catch (error) {
-        console.error('File processing error:', error);
-        setFileContent(`Error processing file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      } finally {
         setIsFileProcessing(false);
+      }
+    } catch (error) {
+      console.error('File processing error:', error);
+      setFileContent(`Error processing file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsFileProcessing(false);
+    } finally {
+      // Reset the file input so the same file can be selected again
+      if (e.target) {
+        e.target.value = '';
       }
     }
   };
@@ -88,12 +106,11 @@ const ChatInput = () => {
     e.preventDefault();
     const totalLoading = isLoading || isFileProcessing;
     if ((!input.trim() && attachments.length === 0) || totalLoading) return;
-    
-    submitPrompt(input);
 
-    if (attachments[0]?.previewUrl) {
-        URL.revokeObjectURL(attachments[0].previewUrl);
-    }
+    const previewUrl = attachments[0]?.previewUrl || '';
+    submitPrompt(input, previewUrl);
+
+    // Clear the local attachment state in the input component.
     setAttachments([]);
   };
 

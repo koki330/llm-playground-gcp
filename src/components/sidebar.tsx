@@ -30,7 +30,7 @@ const Sidebar = () => {
     modelGroups,
   } = useAppContext();
 
-  const MIN_GEMINI_TOKENS = 1000;
+  const MIN_GEMINI_TOKENS = 2000;
 
   // Adjust maxTokens only when the selected model changes
   useEffect(() => {

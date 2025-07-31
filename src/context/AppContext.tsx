@@ -39,7 +39,9 @@ interface AppContextType {
   setSystemPrompt: React.Dispatch<React.SetStateAction<string>>;
   fileContent: string;
   setFileContent: React.Dispatch<React.SetStateAction<string>>;
-  submitPrompt: (prompt: string) => void;
+  imageUri: string; // To hold the GCS URI for images
+  setImageUri: React.Dispatch<React.SetStateAction<string>>;
+  submitPrompt: (prompt: string, previewUrl?: string) => void;
   clearConversation: () => void;
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -67,6 +69,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [selectedModel, setSelectedModel] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [fileContent, setFileContent] = useState('');
+  const [imageUri, setImageUri] = useState('');
   const [isFileProcessing, setIsFileProcessing] = useState(false);
   const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,11 +124,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       maxTokens: currentModelConfig?.type === 'normal' ? maxTokens : undefined,
       reasoningPreset: currentModelConfig?.type === 'reasoning' ? reasoningPreset : undefined,
       webSearchEnabled: isWebSearchEnabled,
+      // imageUri is now passed directly in submitPrompt
     },
     onError: (err) => {
       setError(err.message);
     },
     onFinish: () => {
+      // Reset imageUri after the response is fully received.
+      setImageUri('');
       if (selectedModel) fetchUsage(selectedModel);
     }
   });
@@ -171,20 +177,47 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const clearConversation = () => {
+    // Type guard to check for previewUrl in a type-safe way
+    const hasPreviewUrl = (data: unknown): data is { previewUrl: string } => {
+      return typeof data === 'object' && data != null && 'previewUrl' in data;
+    };
+
+    // Revoke any object URLs to prevent memory leaks
+    messages.forEach(msg => {
+      if (hasPreviewUrl(msg.data)) {
+        URL.revokeObjectURL(msg.data.previewUrl);
+      }
+    });
     setMessages([]);
     setFileContent('');
+    setImageUri('');
   };
 
-  const submitPrompt = async (prompt: string) => {
+  const submitPrompt = async (prompt: string, previewUrl?: string) => {
     if (usageInfo?.isLimited || !selectedModel) return;
     setError(null);
-    let combinedPrompt = prompt;
+
+    let contentForRequest = prompt;
     if (fileContent) {
-      combinedPrompt = `The user has uploaded a file. Its content is:\n\n${fileContent}\n\n---\n\nUser prompt:\n\n${prompt}`;
+      contentForRequest = `The user has uploaded a file. Its content is:\n\n${fileContent}\n\n---\n\nUser prompt:\n\n${prompt}`;
     }
-    await append({ role: 'user', content: combinedPrompt });
+
+    // Let the `useChat` hook handle the message creation and state update.
+    // We pass all necessary info, including UI data, directly to `append`.
+    await append(
+      {
+        role: 'user',
+        content: contentForRequest,
+        data: previewUrl ? { previewUrl } : undefined,
+      },
+      { body: { imageUri } }
+    );
+
+    // Reset input states after the submission is complete.
+    // The core message state is managed by the hook.
     setInput('');
     setFileContent('');
+    // imageUri is reset in onFinish to ensure it's available for the request
   };
 
   return (
@@ -200,6 +233,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setSystemPrompt, 
         fileContent,
         setFileContent,
+        imageUri,
+        setImageUri,
         submitPrompt, 
         clearConversation,
         input,

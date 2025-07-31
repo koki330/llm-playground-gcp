@@ -25,44 +25,101 @@ const ChatView = () => {
         {messages.length === 0 ? (
           <p className="text-center text-gray-500">Select a model and start chatting.</p>
         ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                'flex items-start gap-3',
-                msg.role === 'user' ? 'justify-end' : 'justify-start'
-              )}
-            >
+          messages.map((msg) => {
+            // Type guard to check for previewUrl in a type-safe way
+            const hasPreviewUrl = (data: unknown): data is { previewUrl: string } => {
+              return (
+                typeof data === 'object' &&
+                data != null &&
+                'previewUrl' in data &&
+                typeof (data as { previewUrl: unknown }).previewUrl === 'string'
+              );
+            };
+
+            // The Vercel AI SDK structures multi-modal content in the `parts` array.
+            // We should iterate over `parts` if it exists. Otherwise, fall back to `content`.
+            const messageContent = (
+              <>
+                {Array.isArray(msg.parts) && msg.parts.length > 0 ? (
+                  msg.parts.map((part, index) => {
+                    switch (part.type) {
+                      case 'text':
+                        return (
+                          <ReactMarkdown
+                            key={index}
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code(props) {
+                                const { children, className } = props;
+                                const match = /language-(\w+)/.exec(className || '');
+                                return match ? (
+                                  <CodeBlock className={className}>{children}</CodeBlock>
+                                ) : (
+                                  <code className={className}>{children}</code>
+                                );
+                              },
+                            }}
+                          >
+                            {part.text}
+                          </ReactMarkdown>
+                        );
+                      // NOTE: Add cases for other part types here if needed in the future (e.g., 'tool-call')
+                      default:
+                        return null;
+                    }
+                  })
+                ) : typeof msg.content === 'string' ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code(props) {
+                        const { children, className } = props;
+                        const match = /language-(\w+)/.exec(className || '');
+                        return match ? (
+                          <CodeBlock className={className}>{children}</CodeBlock>
+                        ) : (
+                          <code className={className}>{children}</code>
+                        );
+                      },
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                ) : null}
+              </>
+            );
+
+            return (
               <div
+                key={msg.id}
                 className={cn(
-                  'p-3 rounded-lg max-w-4xl break-words',
-                  msg.role === 'user'
-                    ? 'bg-blue-600'
-                    : 'bg-gray-700',
-                  'prose prose-invert'
+                  'flex items-start gap-3',
+                  msg.role === 'user' ? 'justify-end' : 'justify-start'
                 )}
               >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    code(props) {
-                      const { children, className } = props;
-                      const match = /language-(\w+)/.exec(className || '');
-                      return match ? (
-                        <CodeBlock className={className}>{children}</CodeBlock>
-                      ) : (
-                        <code className={className}>
-                          {children}
-                        </code>
-                      );
-                    },
-                  }}
+                <div
+                  className={cn(
+                    'p-3 rounded-lg max-w-4xl break-words',
+                    msg.role === 'user'
+                      ? 'bg-blue-600'
+                      : 'bg-gray-700',
+                    'prose prose-invert'
+                  )}
                 >
-                  {msg.content}
-                </ReactMarkdown>
+                  <div className="space-y-2">
+                    {hasPreviewUrl(msg.data) && (
+                      <img
+                        src={msg.data.previewUrl}
+                        alt="User uploaded content"
+                        className="rounded-lg max-w-xs lg:max-w-sm xl:max-w-md"
+                      />
+                    )}
+                    {messageContent}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
         {isFileProcessing && (
           <div className="flex items-start gap-3 justify-start">
