@@ -103,7 +103,7 @@ const ChatView = () => {
                     msg.role === 'user'
                       ? 'bg-blue-600'
                       : 'bg-gray-700',
-                    'prose prose-invert'
+                    'prose prose-invert whitespace-pre-wrap'
                   )}
                 >
                   <div className="space-y-2">
