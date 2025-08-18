@@ -1,8 +1,8 @@
 'use client';
 import Image from 'next/image';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { X, Loader2, FileText } from 'lucide-react';
+import { X, Loader2, FileText, Copy, Check } from 'lucide-react';
 import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
@@ -15,6 +15,14 @@ const CodeBlock = dynamic(() => import('./code-block'), { ssr: false });
 const ChatView = () => {
   const { messages, error, setError, isLoading, isFileProcessing } = useAppContext();
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, messageId: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    });
+  };
 
   useEffect(() => {
     endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -27,7 +35,6 @@ const ChatView = () => {
           <p className="text-center text-gray-500">Select a model and start chatting.</p>
         ) : (
           messages.map((msg) => {
-            // Type guard to check for previewUrl in a type-safe way
             const hasPreviewUrl = (data: unknown): data is { previewUrl: string } => {
               return (
                 typeof data === 'object' &&
@@ -37,8 +44,6 @@ const ChatView = () => {
               );
             };
 
-            // The Vercel AI SDK structures multi-modal content in the `parts` array.
-            // We should iterate over `parts` if it exists. Otherwise, fall back to `content`.
             const messageContent = (
               <>
                 {Array.isArray(msg.parts) && msg.parts.length > 0 ? (
@@ -64,7 +69,6 @@ const ChatView = () => {
                             {part.text}
                           </ReactMarkdown>
                         );
-                      // NOTE: Add cases for other part types here if needed in the future (e.g., 'tool-call')
                       default:
                         return null;
                     }
@@ -90,6 +94,10 @@ const ChatView = () => {
               </>
             );
 
+            const rawText = Array.isArray(msg.parts)
+              ? msg.parts.map(p => p.type === 'text' ? p.text : '').join('')
+              : (typeof msg.content === 'string' ? msg.content : '');
+
             return (
               <div
                 key={msg.id}
@@ -100,13 +108,22 @@ const ChatView = () => {
               >
                 <div
                   className={cn(
-                    'p-3 rounded-lg max-w-4xl break-words',
+                    'p-3 rounded-lg max-w-4xl break-words relative group',
                     msg.role === 'user'
                       ? 'bg-blue-600'
                       : 'bg-gray-700',
                     'prose prose-invert'
                   )}
                 >
+                  {msg.role === 'assistant' && rawText && (
+                    <button 
+                      onClick={() => handleCopy(rawText, msg.id)}
+                      className="absolute top-2 right-2 p-1 rounded-md bg-gray-800/50 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Copy Markdown"
+                    >
+                      {copiedMessageId === msg.id ? <Check size={16} /> : <Copy size={16} />}
+                    </button>
+                  )}
                   <div className="space-y-2">
                     {hasPreviewUrl(msg.data) && (
                       <Image
