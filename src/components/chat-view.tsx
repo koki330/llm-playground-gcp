@@ -1,5 +1,5 @@
 'use client';
-
+import Image from 'next/image';
 import { useEffect, useRef } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { X, Loader2, FileText } from 'lucide-react';
@@ -7,6 +7,7 @@ import ChatInput from "./chat-input";
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import dynamic from 'next/dynamic';
 
 const CodeBlock = dynamic(() => import('./code-block'), { ssr: false });
@@ -47,13 +48,13 @@ const ChatView = () => {
                         return (
                           <ReactMarkdown
                             key={index}
-                            remarkPlugins={[remarkGfm]}
+                            remarkPlugins={[remarkGfm, remarkBreaks]}
                             components={{
                               code(props) {
                                 const { children, className } = props;
                                 const match = /language-(\w+)/.exec(className || '');
                                 return match ? (
-                                  <CodeBlock className={className}>{children}</CodeBlock>
+                                  <CodeBlock className={className} isLoading={isLoading}>{children}</CodeBlock>
                                 ) : (
                                   <code className={className}>{children}</code>
                                 );
@@ -70,13 +71,13 @@ const ChatView = () => {
                   })
                 ) : typeof msg.content === 'string' ? (
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
+                    remarkPlugins={[remarkGfm, remarkBreaks]}
                     components={{
                       code(props) {
                         const { children, className } = props;
                         const match = /language-(\w+)/.exec(className || '');
                         return match ? (
-                          <CodeBlock className={className}>{children}</CodeBlock>
+                          <CodeBlock className={className} isLoading={isLoading}>{children}</CodeBlock>
                         ) : (
                           <code className={className}>{children}</code>
                         );
@@ -103,15 +104,18 @@ const ChatView = () => {
                     msg.role === 'user'
                       ? 'bg-blue-600'
                       : 'bg-gray-700',
-                    'prose prose-invert whitespace-pre-wrap'
+                    'prose prose-invert'
                   )}
                 >
                   <div className="space-y-2">
                     {hasPreviewUrl(msg.data) && (
-                      <img
+                      <Image
                         src={msg.data.previewUrl}
                         alt="User uploaded content"
-                        className="rounded-lg max-w-xs lg:max-w-sm xl:max-w-md"
+                        width={500}
+                        height={500}
+                        className="h-auto rounded-lg max-w-xs lg:max-w-sm xl:max-w-md"
+                        unoptimized
                       />
                     )}
                     {messageContent}
