@@ -4,6 +4,7 @@ import { CoreMessage, streamText, generateObject } from 'ai';
 import { getOpenAIProvider } from '@/services/openai';
 import { getAnthropicProvider } from '@/services/anthropic';
 import { getGoogleProvider } from '@/services/vertexai';
+import { getGpt5Response } from '@/services/openai-gpt5';
 import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
 import { getModelsConfig } from '@/config/modelConfig';
@@ -252,7 +253,31 @@ export async function POST(req: NextRequest) {
       }, null, 2));
       // --- End Debug Log ---
 
-      if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
+      const { modelConfig } = await getModelsConfig();
+      const selectedModelConfig = modelConfig[modelId];
+
+      if (selectedModelConfig && selectedModelConfig.service === 'gpt5') {
+        const lastMessage = processedMessages[processedMessages.length - 1];
+        const inputText = Array.isArray(lastMessage.content)
+          ? lastMessage.content.find(c => c.type === 'text')?.text || ''
+          : lastMessage.content;
+
+        const gpt5Response = await getGpt5Response(modelId, inputText as string, { reasoning: 'low' });
+
+        // Create a stream in the Vercel AI SDK format
+        const stream = new ReadableStream({
+          start(controller) {
+            // The '0' prefix is for text chunks
+            controller.enqueue(`0:"${JSON.stringify(gpt5Response).slice(1, -1)}"\n`);
+            controller.close();
+          },
+        });
+
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+
+      } else if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
           const result = await streamText({ ...streamTextConfig, model: getOpenAIProvider()(modelId) });
           return result.toDataStreamResponse();
       } else if (modelId.startsWith('claude')) {
