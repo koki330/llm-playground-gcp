@@ -28,6 +28,10 @@ const Sidebar = () => {
     isWebSearchEnabled,
     setIsWebSearchEnabled,
     modelGroups,
+    gpt5ReasoningEffort,
+    setGpt5ReasoningEffort,
+    gpt5Verbosity,
+    setGpt5Verbosity,
   } = useAppContext();
 
   const MIN_GEMINI_TOKENS = 2000;
@@ -65,6 +69,42 @@ const Sidebar = () => {
     if (isConfigLoading || !currentModelConfig) {
       return (
         <div className="text-sm text-gray-400">モデル設定を読み込み中...</div>
+      );
+    }
+
+    if (currentModelConfig.type === 'gpt5') {
+      return (
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="gpt5ReasoningEffort" className="block text-sm font-medium text-gray-300">Reasoning Effort</label>
+            <select
+              id="gpt5ReasoningEffort"
+              value={gpt5ReasoningEffort}
+              onChange={(e) => setGpt5ReasoningEffort(e.target.value as 'minimal' | 'low' | 'medium' | 'high')}
+              className="w-full p-2 mt-1 bg-gray-700 rounded-md"
+              disabled={isLoading}
+            >
+              <option value="minimal">Minimal</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="gpt5Verbosity" className="block text-sm font-medium text-gray-300">Verbosity</label>
+            <select
+              id="gpt5Verbosity"
+              value={gpt5Verbosity}
+              onChange={(e) => setGpt5Verbosity(e.target.value as 'low' | 'medium' | 'high')}
+              className="w-full p-2 mt-1 bg-gray-700 rounded-md"
+              disabled={isLoading}
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
       );
     }
 

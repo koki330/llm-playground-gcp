@@ -29,7 +29,7 @@
   ],
   "modelConfig": {
     "claude-sonnet4": { "type": "normal", "maxTokens": 64000 },
-    "gpt-5": { "type": "normal", "maxTokens": 32768, "service": "gpt5" },
+    "gpt-5": { "type": "gpt5", "maxTokens": 32768, "service": "gpt5" },
     "gpt-5-mini": { "type": "normal", "maxTokens": 32768, "service": "gpt5" },
     "gpt-5-nano": { "type": "normal", "maxTokens": 32768, "service": "gpt5" },
     "gpt-4.1": { "type": "normal", "maxTokens": 32768 },

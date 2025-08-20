@@ -21,6 +21,8 @@ interface ChatRequestBody {
   reasoningPreset?: 'low' | 'middle' | 'high';
   webSearchEnabled?: boolean;
   imageUri?: string; // Added for image URI
+  gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  gpt5Verbosity?: 'low' | 'medium' | 'high';
 }
 
 // Extend CoreMessage to include an optional 'parts' property for type safety
@@ -94,7 +96,7 @@ const usageTracker = {
 export async function POST(req: NextRequest) {
   try {
     const body: ChatRequestBody = await req.json();
-    const { messages, modelId, systemPrompt, temperaturePreset, maxTokens, reasoningPreset, webSearchEnabled, imageUri } = body;
+    const { messages, modelId, systemPrompt, temperaturePreset, maxTokens, reasoningPreset, webSearchEnabled, imageUri, gpt5ReasoningEffort, gpt5Verbosity } = body;
 
     // --- DEBUG START ---
     console.log('[DEBUG] Received request body:', JSON.stringify(body, null, 2));
@@ -262,7 +264,7 @@ export async function POST(req: NextRequest) {
           ? lastMessage.content.find(c => c.type === 'text')?.text || ''
           : lastMessage.content;
 
-        const gpt5Response = await getGpt5Response(modelId, inputText as string, { reasoning: 'low' });
+        const gpt5Response = await getGpt5Response(modelId, inputText as string, { reasoning: gpt5ReasoningEffort || 'low', verbosity: gpt5Verbosity || 'low' });
 
         // Create a stream in the Vercel AI SDK format
         const stream = new ReadableStream({

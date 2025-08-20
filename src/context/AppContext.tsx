@@ -17,7 +17,7 @@ export type TemperaturePreset = 'precise' | 'balanced' | 'creative';
 // Type for the configuration data fetched from the API
 interface ModelConfigData {
   modelGroups: { label: string; models: Record<string, string> }[];
-  modelConfig: Record<string, { type: 'reasoning' | 'normal'; maxTokens: number }>;
+  modelConfig: Record<string, { type: 'reasoning' | 'normal' | 'gpt5'; maxTokens: number }>;
 }
 
 interface UsageInfo {
@@ -55,10 +55,14 @@ interface AppContextType {
   setMaxTokens: React.Dispatch<React.SetStateAction<number>>;
   reasoningPreset: ReasoningPreset;
   setReasoningPreset: React.Dispatch<React.SetStateAction<ReasoningPreset>>;
-  currentModelConfig: { type: 'reasoning' | 'normal', maxTokens: number } | undefined;
+  currentModelConfig: { type: 'reasoning' | 'normal' | 'gpt5', maxTokens: number } | undefined;
   isWebSearchEnabled: boolean;
   setIsWebSearchEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   modelGroups: { label: string; models: Record<string, string> }[];
+  gpt5ReasoningEffort: 'minimal' | 'low' | 'medium' | 'high';
+  setGpt5ReasoningEffort: React.Dispatch<React.SetStateAction<'minimal' | 'low' | 'medium' | 'high'>>;
+  gpt5Verbosity: 'low' | 'medium' | 'high';
+  setGpt5Verbosity: React.Dispatch<React.SetStateAction<'low' | 'medium' | 'high'>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -78,6 +82,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [maxTokens, setMaxTokens] = useState(4096);
   const [reasoningPreset, setReasoningPreset] = useState<ReasoningPreset>('middle');
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
+  const [gpt5ReasoningEffort, setGpt5ReasoningEffort] = useState<'minimal' | 'low' | 'medium' | 'high'>('low');
+  const [gpt5Verbosity, setGpt5Verbosity] = useState<'low' | 'medium' | 'high'>('low');
 
   const currentModelConfig = modelConfigData?.modelConfig[selectedModel];
   const modelGroups = modelConfigData?.modelGroups || [];
@@ -124,6 +130,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       maxTokens: currentModelConfig?.type === 'normal' ? maxTokens : undefined,
       reasoningPreset: currentModelConfig?.type === 'reasoning' ? reasoningPreset : undefined,
       webSearchEnabled: isWebSearchEnabled,
+      gpt5ReasoningEffort: selectedModel === 'gpt-5' ? gpt5ReasoningEffort : undefined,
+      gpt5Verbosity: selectedModel === 'gpt-5' ? gpt5Verbosity : undefined,
       // imageUri is now passed directly in submitPrompt
     },
     onError: (err) => {
@@ -253,6 +261,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         isWebSearchEnabled,
         setIsWebSearchEnabled,
         modelGroups,
+        gpt5ReasoningEffort,
+        setGpt5ReasoningEffort,
+        gpt5Verbosity,
+        setGpt5Verbosity,
     }}>
       {children}
     </AppContext.Provider>
