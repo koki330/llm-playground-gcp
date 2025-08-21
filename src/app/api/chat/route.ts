@@ -158,7 +158,6 @@ export async function POST(req: NextRequest) {
 
                 if ("parts" in (lastUserMessage as Record<string, unknown>)) {
                     // parts は自前の拡張なので削除
-                    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
                     delete (lastUserMessage as Record<string, unknown>).parts;
                 }
 

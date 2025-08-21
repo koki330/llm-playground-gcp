@@ -2,9 +2,11 @@ import OpenAI from "openai";
 import type { Effort, Verbosity, Usage } from "@/types/ai";
 import { isResponsesStreamEvent, extractErrorMessage } from "@/types/ai";
 
-const client = new OpenAI({
-    apiKey: process.env.LLM_GCP_OPENAI_API_KEY!,
-});
+function getOpenAIClient() {
+    return new OpenAI({
+        apiKey: process.env.LLM_GCP_OPENAI_API_KEY!,
+    });
+}
 
 type InputTextPart = { type: "input_text"; text: string };
 type InputImagePart = { type: "input_image"; image_url: string; detail: "low" | "high" | "auto" };
@@ -26,6 +28,7 @@ export interface Gpt5Result {
 
 // 非ストリーミング
 export async function getGpt5Response(params: Gpt5Params): Promise<Gpt5Result> {
+    const client = getOpenAIClient();
     const {
         model,
         prompt,
@@ -69,6 +72,7 @@ export async function getGpt5Response(params: Gpt5Params): Promise<Gpt5Result> {
 export async function streamGpt5Response(params: Gpt5Params & {
     onUsage?: (usage: Usage) => Promise<void> | void;
 }): Promise<ReadableStream<Uint8Array>> {
+    const client = getOpenAIClient();
     const {
         model,
         prompt,
