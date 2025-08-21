@@ -307,6 +307,7 @@ export async function POST(req: NextRequest) {
             imageUrlOrDataUrl: imageFromMsg,
             reasoning: gpt5ReasoningEffort || "low",
             verbosity: gpt5Verbosity || "low",
+            systemPrompt: systemPrompt,
             onUsage: async (usage) => {
                 if (!pricing) return;
                 const inT = usage.input_tokens ?? usage.input_text_tokens ?? 0;

@@ -16,6 +16,7 @@ export interface Gpt5Params {
     imageUrlOrDataUrl?: string;
     reasoning?: Effort;
     verbosity?: Verbosity;
+    systemPrompt?: string;
 }
 
 export interface Gpt5Result {
@@ -31,6 +32,7 @@ export async function getGpt5Response(params: Gpt5Params): Promise<Gpt5Result> {
         imageUrlOrDataUrl,
         reasoning = "low",
         verbosity = "low",
+        systemPrompt,
     } = params;
 
     const content: UserContentPart[] = [{ type: "input_text", text: prompt }];
@@ -42,6 +44,7 @@ export async function getGpt5Response(params: Gpt5Params): Promise<Gpt5Result> {
         const res = await client.responses.create({
             model,
             input: [{ role: "user", content }],
+            instructions: systemPrompt,
             reasoning: { effort: reasoning },
             text: { verbosity },
         });
@@ -72,6 +75,7 @@ export async function streamGpt5Response(params: Gpt5Params & {
         imageUrlOrDataUrl,
         reasoning = "low",
         verbosity = "low",
+        systemPrompt,
         onUsage,
     } = params;
 
@@ -86,6 +90,7 @@ export async function streamGpt5Response(params: Gpt5Params & {
         const stream = await client.responses.stream({
             model: modelToUse,
             input: [{ role: "user", content }],
+            instructions: systemPrompt,
             reasoning: { effort: reasoning },
             text: { verbosity },
         });
