@@ -76,7 +76,7 @@ const Sidebar = () => {
       return (
         <div className="space-y-4">
           <div>
-            <label htmlFor="gpt5ReasoningEffort" className="block text-sm font-medium text-gray-300">Reasoning Effort</label>
+            <label htmlFor="gpt5ReasoningEffort" className="block text-sm font-medium text-gray-300">リーゾニング精度</label>
             <select
               id="gpt5ReasoningEffort"
               value={gpt5ReasoningEffort}
@@ -91,7 +91,7 @@ const Sidebar = () => {
             </select>
           </div>
           <div>
-            <label htmlFor="gpt5Verbosity" className="block text-sm font-medium text-gray-300">Verbosity</label>
+            <label htmlFor="gpt5Verbosity" className="block text-sm font-medium text-gray-300">回答のスタイル</label>
             <select
               id="gpt5Verbosity"
               value={gpt5Verbosity}
@@ -99,9 +99,9 @@ const Sidebar = () => {
               className="w-full p-2 mt-1 bg-gray-700 rounded-md"
               disabled={isLoading}
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
+              <option value="low">堅実</option>
+              <option value="medium">標準</option>
+              <option value="high">創造的</option>
             </select>
           </div>
         </div>

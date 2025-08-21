@@ -82,8 +82,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [maxTokens, setMaxTokens] = useState(4096);
   const [reasoningPreset, setReasoningPreset] = useState<ReasoningPreset>('middle');
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
-  const [gpt5ReasoningEffort, setGpt5ReasoningEffort] = useState<'minimal' | 'low' | 'medium' | 'high'>('low');
-  const [gpt5Verbosity, setGpt5Verbosity] = useState<'low' | 'medium' | 'high'>('low');
+  const [gpt5ReasoningEffort, setGpt5ReasoningEffort] = useState<'minimal' | 'low' | 'medium' | 'high'>('medium');
+  const [gpt5Verbosity, setGpt5Verbosity] = useState<'low' | 'medium' | 'high'>('medium');
 
   const currentModelConfig = modelConfigData?.modelConfig[selectedModel];
   const modelGroups = modelConfigData?.modelGroups || [];
@@ -130,8 +130,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       maxTokens: currentModelConfig?.type === 'normal' ? maxTokens : undefined,
       reasoningPreset: currentModelConfig?.type === 'reasoning' ? reasoningPreset : undefined,
       webSearchEnabled: isWebSearchEnabled,
-      gpt5ReasoningEffort: selectedModel === 'gpt-5' ? gpt5ReasoningEffort : undefined,
-      gpt5Verbosity: selectedModel === 'gpt-5' ? gpt5Verbosity : undefined,
+      gpt5ReasoningEffort: selectedModel.startsWith('gpt-5') ? gpt5ReasoningEffort : undefined,
+      gpt5Verbosity: selectedModel.startsWith('gpt-5') ? gpt5Verbosity : undefined,
       // imageUri is now passed directly in submitPrompt
     },
     onError: (err) => {

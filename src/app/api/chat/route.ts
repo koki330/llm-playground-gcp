@@ -4,7 +4,7 @@ import { CoreMessage, streamText, generateObject } from 'ai';
 import { getOpenAIProvider } from '@/services/openai';
 import { getAnthropicProvider } from '@/services/anthropic';
 import { getGoogleProvider } from '@/services/vertexai';
-import { getGpt5Response } from '@/services/openai-gpt5';
+import { streamGpt5Response } from '@/services/openai-gpt5';
 import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
 import { getModelsConfig } from '@/config/modelConfig';
@@ -29,6 +29,16 @@ interface ChatRequestBody {
 type AppMessage = CoreMessage & {
   parts?: { type: string; text: string }[];
 };
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+    return typeof v === "object" && v !== null;
+}
+function isTextPart(p: unknown): p is { type: "text"; text: string } {
+    return isRecord(p) && p.type === "text" && typeof p.text === "string";
+}
+function isImagePart(p: unknown): p is { type: "image"; image: string } {
+    return isRecord(p) && p.type === "image" && typeof p.image === "string";
+}
 
 
 
@@ -96,7 +106,7 @@ const usageTracker = {
 export async function POST(req: NextRequest) {
   try {
     const body: ChatRequestBody = await req.json();
-    const { messages, modelId, systemPrompt, temperaturePreset, maxTokens, reasoningPreset, webSearchEnabled, imageUri, gpt5ReasoningEffort, gpt5Verbosity } = body;
+    const { messages, modelId, systemPrompt, temperaturePreset, maxTokens, reasoningPreset, webSearchEnabled, imageUri } = body;
 
     // --- DEBUG START ---
     console.log('[DEBUG] Received request body:', JSON.stringify(body, null, 2));
@@ -128,28 +138,38 @@ export async function POST(req: NextRequest) {
             if (lastUserMessage) {
                 const textContent = typeof lastUserMessage.content === 'string' ? lastUserMessage.content : '';
                 
-                // Convert buffer to base64 string for the AI model
-                const imageBase64 = fileBuffer.toString('base64');
+                const [metadata] = await storage.bucket(bucket).file(fileName).getMetadata();
+                const mime = metadata?.contentType || "image/png";
+                const imageBase64 = fileBuffer.toString("base64");
+                const dataUrl = `data:${mime};base64,${imageBase64}`;
 
+                // 修正: imageUrl を使う（AI SDKの期待形式）
                 lastUserMessage.content = [
-                    { type: 'image', image: imageBase64 },
-                    { type: 'text', text: textContent },
+                    { type: 'image', image: dataUrl },
+                    { type: 'text', text: textContent }
                 ];
 
-                // Delete the parts field to avoid conflicts
-                if ('parts' in lastUserMessage) {
-                  delete lastUserMessage.parts;
+                const newContent: Array<{ type: "image"; image: string } | { type: "text"; text: string }> = [
+                    { type: "image", image: dataUrl },
+                    { type: "text", text: textContent },
+                ];
+
+                (lastUserMessage as { content: unknown }).content = newContent;
+
+                if ("parts" in (lastUserMessage as Record<string, unknown>)) {
+                    // parts は自前の拡張なので削除
+                    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+                    delete (lastUserMessage as Record<string, unknown>).parts;
                 }
-                
-                // Modify the log to avoid printing the large base64 string
-                const messageForLog = {
+
+                // ログはbase64を出さない
+                console.log("[DEBUG] Constructed multi-modal message:", JSON.stringify({
                     ...lastUserMessage,
                     content: [
-                        { type: 'image', image: `Base64 string with length ${imageBase64.length}` },
-                        { type: 'text', text: textContent },
+                        { type: "image", imageUrl: `data:${mime};base64,[OMITTED length=${imageBase64.length}]` },
+                        { type: "text", text: textContent }
                     ]
-                };
-                console.log('[DEBUG] Constructed multi-modal message:', JSON.stringify(messageForLog, null, 2));
+                }, null, 2));
             }
         } catch (e) {
             console.error('[ERROR] Failed during GCS image processing:', e);
@@ -204,7 +224,7 @@ export async function POST(req: NextRequest) {
       // Step 1: Generate a search query based on the text content of the conversation.
       const conversationHistoryForSearch = messages.map(m => `${m.role}: ${Array.isArray(m.content) ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : m.content}`).join('\n');
       const { object: { query } } = await generateObject({
-        model: getOpenAIProvider()('gpt-4.1-mini'), // Use a fast model for query generation
+        model: getOpenAIProvider()('gpt-5-mini'), // Use a fast model for query generation
         schema: z.object({
           query: z.string().describe('A concise and effective search query based on the conversation history to answer the latest user prompt.'),
         }),
@@ -259,26 +279,45 @@ export async function POST(req: NextRequest) {
       const selectedModelConfig = modelConfig[modelId];
 
       if (selectedModelConfig && selectedModelConfig.service === 'gpt5') {
+        const { gpt5ReasoningEffort, gpt5Verbosity } = body;
         const lastMessage = processedMessages[processedMessages.length - 1];
-        const inputText = Array.isArray(lastMessage.content)
-          ? lastMessage.content.find(c => c.type === 'text')?.text || ''
-          : lastMessage.content;
 
-        const gpt5Response = await getGpt5Response(modelId, inputText as string, { reasoning: gpt5ReasoningEffort || 'low', verbosity: gpt5Verbosity || 'low' });
+        let inputText = "";
+        let imageFromMsg: string | undefined;
 
-        // Create a stream in the Vercel AI SDK format
-        const stream = new ReadableStream({
-          start(controller) {
-            // The '0' prefix is for text chunks
-            controller.enqueue(`0:"${JSON.stringify(gpt5Response).slice(1, -1)}"\n`);
-            controller.close();
-          },
+        if (Array.isArray(lastMessage.content)) {
+            const textPart = lastMessage.content.find(isTextPart);
+            if (textPart) {
+                inputText = textPart.text;
+            }
+            const imagePart = lastMessage.content.find(isImagePart);
+            if (imagePart) {
+                imageFromMsg = imagePart.image;
+            }
+        } else if (typeof lastMessage.content === "string") {
+            inputText = lastMessage.content;
+        }
+
+        const { pricingPerMillionTokensUSD } = await getModelsConfig();
+        const pricing = pricingPerMillionTokensUSD[modelId];
+
+        const stream = await streamGpt5Response({
+            model: modelId,
+            prompt: inputText,
+            imageUrlOrDataUrl: imageFromMsg,
+            reasoning: gpt5ReasoningEffort || "low",
+            verbosity: gpt5Verbosity || "low",
+            onUsage: async (usage) => {
+                if (!pricing) return;
+                const inT = usage.input_tokens ?? usage.input_text_tokens ?? 0;
+                const outT = usage.output_tokens ?? usage.output_text_tokens ?? 0;
+                await usageTracker.updateUsage(modelId, inT, outT, pricing);
+            },
         });
 
         return new Response(stream, {
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
         });
-
       } else if (modelId.startsWith('gpt') || modelId.startsWith('o')) {
           const result = await streamText({ ...streamTextConfig, model: getOpenAIProvider()(modelId) });
           return result.toDataStreamResponse();
