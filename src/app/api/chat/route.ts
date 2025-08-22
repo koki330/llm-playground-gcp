@@ -86,6 +86,32 @@ const usageTracker = {
         const outputCost = (safeOutputTokens / 1_000_000) * pricing.output;
         const requestCost = inputCost + outputCost;
         const docRef = usageTracker.getDocRef(modelId);
+        const currentMonth = new Date().toISOString().slice(0, 7);
+
+        const doc = await docRef.get();
+        if (doc.exists) {
+            // Document exists, check for monthly reset
+            const docData = doc.data();
+            if (docData && docData.year_month && docData.year_month !== currentMonth) {
+                // It's a new month, reset the costs.
+                await docRef.set({
+                    total_cost: 0,
+                    year_month: currentMonth,
+                    daily_costs: {},
+                    last_updated: ''
+                });
+            }
+            // If year_month is missing or matches current month, do nothing. Let the update proceed.
+        } else {
+            // Document does not exist, create it.
+            await docRef.set({
+                total_cost: 0,
+                year_month: currentMonth,
+                daily_costs: {},
+                last_updated: ''
+            });
+        }
+
         const today = new Date().toISOString().slice(0, 10);
         const dailyCostField = `daily_costs.${today}`;
         const now = new Date();
@@ -95,6 +121,7 @@ const usageTracker = {
         const hours = now.getHours().toString().padStart(2, '0');
         const minutes = now.getMinutes().toString().padStart(2, '0');
         const lastUpdatedTimestamp = `${year}/${month}/${day}/${hours}:${minutes}`;
+        
         await docRef.update({
           total_cost: FieldValue.increment(requestCost),
           [dailyCostField]: FieldValue.increment(requestCost),
