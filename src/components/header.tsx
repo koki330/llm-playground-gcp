@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Trash2, Info, History } from 'lucide-react';
+import { Trash2, Info, History, Globe } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
 import { useOnClickOutside } from '@/hooks/useOnClickOutside';
 import ReleaseNotesModal from './ReleaseNotesModal';
@@ -84,6 +84,16 @@ const Header = () => {
           <History size={18} />
           <span>アップデート情報</span>
         </button>
+        <a 
+          href="https://tecnos-translate-701078018244.asia-northeast1.run.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-2 rounded-md hover:bg-gray-700 text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+          title="Tecnos Translate"
+        >
+          <Globe size={18} />
+          <span>Tecnos Translate</span>
+        </a>
       </div>
       <div>
         <button 
