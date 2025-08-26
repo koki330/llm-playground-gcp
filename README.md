@@ -2,6 +2,29 @@
 
 複数のLLMプロバイダー（Anthropic, OpenAI, Google）のAIモデルとの対話を、統一されたインターフェースで実現する高機能なWebアプリケーションです。ファイルアップロード、モデルごとの動的なパラメータ設定、利用料金の追跡と上限設定など、実践的な機能を備えています。
 
+## 🚀 技術スタック (Technology Stack)
+
+このプロジェクトは、以下の主要な技術スタックで構築されています。
+
+- **フレームワーク:** [Next.js](https://nextjs.org/) (with React, TypeScript)
+- **UI:** [Tailwind CSS](https://tailwindcss.com/)
+- **AI連携:**
+  - [Vercel AI SDK](https://sdk.vercel.ai/docs)
+  - [OpenAI API](https://platform.openai.com/docs/overview)
+  - [Google Cloud Vertex AI API](https://cloud.google.com/vertex-ai/docs/generative-ai/learn/overview)
+  - [Anthropic API](https://docs.anthropic.com/en/api/overview)
+- **バックエンド & インフラ:**
+  - **API:** Next.js API Routes
+  - **ホスティング:** Google Cloud Run
+  - **CI/CD:** Google Cloud Build
+  - **ファイルストレージ:** Google Cloud Storage
+  - **テキスト抽出 (OCR):** Google Cloud Document AI
+  - **使用量記録DB:** Google Cloud Firestore
+- **主要ライブラリ:**
+  - `lucide-react` (アイコン)
+  - `react-markdown` (Markdownレンダリング)
+  - `shiki` (シンタックスハイライト)
+
 ## ✨ 機能概要
 
 ### 対応AIモデル
