@@ -22,7 +22,7 @@ const CodeBlock = memo(({ className, children, isLoading }: CodeBlockProps) => {
           // Step 1: Highlight code with shiki
           const html = await codeToHtml(codeString, {
             lang,
-            theme: 'github-dark'
+            theme: 'github-light'
           });
 
           // Step 2: Dynamically import DOMPurify and sanitize the HTML

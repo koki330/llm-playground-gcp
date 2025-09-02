@@ -6,7 +6,7 @@ import { AppProvider } from "@/context/AppContext";
 export default function Home() {
   return (
     <AppProvider>
-      <div className="flex flex-col h-screen bg-gray-900 text-white">
+      <div className="flex flex-col h-screen">
         <Header />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />

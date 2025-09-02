@@ -1,19 +1,18 @@
 @import "tailwindcss";
 
 body {
-  background-color: #0a0a0a;
-  color: #ededed;
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #FFFFFF;
+  color: #333333;
 }
 
 /* Markdown styles */
 .prose {
-  color: #d1d5db;
+  color: #333333;
   line-height: 1.7;
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-  color: #ffffff;
+  color: #111827;
   font-weight: 600;
   margin-top: 1.5em;
   margin-bottom: 0.75em;
@@ -21,7 +20,7 @@ body {
 
 .prose h2 {
   padding-bottom: 0.3em;
-  border-bottom: 1px solid #374151;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .prose p {
@@ -57,14 +56,14 @@ body {
   margin-bottom: 1.5em;
   padding: 0.5em 1em;
   border-left-width: 4px;
-  border-color: #4b5563;
-  background-color: #1f2937;
-  color: #d1d5db;
+  border-color: #d1d5db;
+  background-color: #f9fafb;
+  color: #374151;
   font-style: normal;
 }
 
 .prose a {
-  color: #60a5fa;
+  color: #2563eb;
   text-decoration: none;
   font-weight: 500;
 }
@@ -74,8 +73,8 @@ body {
 }
 
 .prose code {
-  background-color: #374151;
-  color: #e5e7eb;
+  background-color: #e5e7eb;
+  color: #1f2937;
   padding: 0.2em 0.4em;
   border-radius: 0.25rem;
   font-family: var(--font-geist-mono);
@@ -83,8 +82,8 @@ body {
 }
 
 .prose pre {
-  background-color: #1f2937 !important;
-  border: 1px solid #374151;
+  background-color: #f3f4f6 !important;
+  border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   padding: 1em;
   overflow-x: auto;

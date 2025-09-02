@@ -108,17 +108,17 @@ const ChatView = () => {
               >
                 <div
                   className={cn(
-                    'p-3 rounded-lg max-w-4xl break-words relative group',
-                    msg.role === 'user'
-                      ? 'bg-blue-600'
-                      : 'bg-gray-700',
-                    'prose prose-invert'
-                  )}
+                  'p-3 rounded-lg max-w-4xl break-words relative group',
+                  'prose',
+                  msg.role === 'user'
+                    ? 'bg-blue-100'
+                    : 'bg-gray-100'
+                )}
                 >
                   {msg.role === 'assistant' && rawText && (
                     <button 
                       onClick={() => handleCopy(rawText, msg.id)}
-                      className="absolute top-2 right-2 p-1 rounded-md bg-gray-800/50 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-2 right-2 p-1 rounded-md bg-black/5 text-gray-500 hover:bg-black/10 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
                       title="Copy Markdown"
                     >
                       {copiedMessageId === msg.id ? <Check size={16} /> : <Copy size={16} />}
@@ -144,7 +144,7 @@ const ChatView = () => {
         )}
         {isFileProcessing && (
           <div className="flex items-start gap-3 justify-start">
-            <div className="p-3 rounded-lg bg-gray-700 flex items-center space-x-2">
+            <div className="p-3 rounded-lg bg-gray-100 text-gray-700 flex items-center space-x-2">
               <FileText className="h-5 w-5 animate-pulse" />
               <span className="text-sm">ファイルを処理中です...</span>
             </div>
@@ -152,7 +152,7 @@ const ChatView = () => {
         )}
         {!isFileProcessing && isLoading && (
           <div className="flex items-start gap-3 justify-start">
-            <div className="p-3 rounded-lg bg-gray-700 flex items-center space-x-2">
+            <div className="p-3 rounded-lg bg-gray-100 text-gray-700 flex items-center space-x-2">
               <Loader2 className="h-5 w-5 animate-spin" />
               <span className="text-sm">回答を生成中です...</span>
             </div>
@@ -164,7 +164,7 @@ const ChatView = () => {
         <div className="p-4 border-t border-gray-700 bg-red-900/50 text-red-300">
           <div className="flex items-center justify-between">
             <p><span className="font-bold">Error:</span> {error}</p>
-            <button onClick={() => setError(null)} className="p-1 rounded-full hover:bg-red-800/50">
+            <button onClick={() => setError(null)} className="p-1 rounded-full hover:bg-red-200">
               <X size={18} />
             </button>
           </div>

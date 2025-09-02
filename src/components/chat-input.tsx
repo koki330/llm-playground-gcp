@@ -129,9 +129,9 @@ const ChatInput = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 bg-gray-800 border-t border-gray-700">
+    <form onSubmit={handleSubmit} className="p-4 bg-gray-50 border-t border-gray-200">
       {attachments.length > 0 && (
-        <div className="p-2 mb-2 bg-gray-700 rounded-lg text-sm text-white">
+        <div className="p-2 mb-2 bg-gray-100 rounded-lg text-sm text-gray-800">
           {attachments.map(file => (
             <div key={file.name} className="flex items-center justify-between">
               <span>{file.name}</span>
@@ -146,7 +146,7 @@ const ChatInput = () => {
         <button 
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="p-2 mt-2 rounded-full hover:bg-gray-700 text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="p-2 mt-2 rounded-full hover:bg-gray-200 text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#A61C4B]"
           disabled={isLoading || isFileProcessing}
         >
           <Paperclip size={20} />
@@ -165,7 +165,7 @@ const ChatInput = () => {
           onCompositionEnd={() => setIsComposing(false)}
           onKeyDown={handleKeyDown}
           placeholder="Message a model, or add a file..."
-          className="flex-grow p-2 pr-16 rounded-lg bg-gray-700 text-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="flex-grow p-2 pr-16 rounded-lg bg-white border border-gray-300 text-black resize-none focus:outline-none focus:ring-2 focus:ring-[#A61C4B] disabled:opacity-50"
           minRows={2}
           maxRows={20}
           disabled={isLoading || isFileProcessing}
@@ -175,14 +175,14 @@ const ChatInput = () => {
             type="button"
             onClick={stopGeneration}
             title="回答停止"
-            className="absolute right-3 bottom-3 p-2 rounded-lg bg-gray-600 hover:bg-gray-700 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="absolute right-3 bottom-3 p-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400"
           >
             <Square size={20} />
           </button>
         ) : (
           <button 
             type="submit"
-            className="absolute right-3 bottom-3 p-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="absolute right-3 bottom-3 p-2 rounded-lg bg-[#A61C4B] hover:bg-[#85163c] disabled:bg-gray-300 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-[#A61C4B] disabled:opacity-50"
             disabled={(!input.trim() && attachments.length === 0) || isFileProcessing}
           >
             <Send size={20} />
