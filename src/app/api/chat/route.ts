@@ -251,6 +251,7 @@ export async function POST(req: NextRequest) {
       const conversationHistoryForSearch = messages.map(m => `${m.role}: ${Array.isArray(m.content) ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : m.content}`).join('\n');
       const { object: { query } } = await generateObject({
         model: getOpenAIProvider()('gpt-5-mini'), // Use a fast model for query generation
+        temperature: 1, // Force temperature to 1 for query generation
         schema: z.object({
           query: z.string().describe('A concise and effective search query based on the conversation history to answer the latest user prompt.'),
         }),
