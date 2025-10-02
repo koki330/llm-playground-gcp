@@ -3,7 +3,7 @@
     {
       "label": "Anthropic",
       "models": {
-        "Claude Sonnet 4": "claude-sonnet4"
+        "Claude Sonnet 4.5": "claude-sonnet-4-5"
       }
     },
     {
@@ -32,6 +32,7 @@
   ],
   "modelConfig": {
     "claude-sonnet4": { "type": "normal", "maxTokens": 64000 },
+    "claude-sonnet-4-5": { "type": "normal", "maxTokens": 64000 },
     "gpt-5": { "type": "gpt5", "maxTokens": 128000, "service": "gpt5" },
     "gpt-5-mini": { "type": "gpt5", "maxTokens": 128000, "service": "gpt5" },
     "gpt-5-nano": { "type": "gpt5", "maxTokens": 128000, "service": "gpt5" },
@@ -47,6 +48,7 @@
   },
   "pricingPerMillionTokensUSD": {
     "claude-sonnet4": { "input": 3, "output": 15 },
+    "claude-sonnet-4-5": { "input": 3, "output": 15 },
     "gpt-5": { "input": 1.25, "output": 10 },
     "gpt-5-mini": { "input": 0.25, "output": 2 },
     "gpt-5-nano": { "input": 0.05, "output": 0.4 },

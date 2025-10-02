@@ -1,0 +1,335 @@
+# What's new in Claude Sonnet 4.5
+
+> Claude Sonnet 4.5 is our best model for building complex agents that can work independently for extended periods. It advances the frontier in coding capabilities, achieves state-of-the-art performance in computer use, and excels at powering agents for financial analysis, cybersecurity, and research applications.
+
+## Key improvements over Sonnet 4
+
+### Coding excellence
+
+Claude Sonnet 4.5 is our best coding model to date, with significant improvements across the entire development lifecycle:
+
+* **SWE-bench Verified performance**: Advanced state-of-the-art on coding benchmarks
+* **Enhanced planning and system design**: Better architectural decisions and code organization
+* **Improved security engineering**: More robust security practices and vulnerability detection
+* **Better instruction following**: More precise adherence to coding specifications and requirements
+
+<Note>
+  **Extended thinking for optimal performance**: Claude Sonnet 4.5 performs significantly better on coding tasks when [extended thinking](/en/docs/build-with-claude/extended-thinking) is enabled. Extended thinking is disabled by default, but we recommend enabling it for complex coding work. Be aware that extended thinking impacts [prompt caching efficiency](/en/docs/build-with-claude/prompt-caching#caching-with-thinking-blocks). See the [migration guide](/en/docs/about-claude/models/migrating-to-claude-4#extended-thinking-recommendations) for configuration details.
+</Note>
+
+### Agent capabilities
+
+Claude Sonnet 4.5 introduces major advances in agent capabilities:
+
+* **Extended autonomous operation**: Sonnet 4.5 can work independently for hours while maintaining clarity and focus on incremental progress. The model makes steady advances on a few tasks at a time rather than attempting everything at once. It provides fact-based progress updates that accurately reflect what has been accomplished.
+* **Context awareness**: Claude now tracks its token usage throughout conversations, receiving updates after each tool call. This awareness helps prevent premature task abandonment and enables more effective execution on long-running tasks. See [Context awareness](/en/docs/build-with-claude/context-windows#context-awareness-in-claude-sonnet-4-5) for technical details and [prompting guidance](/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices#context-awareness-and-multi-window-workflows).
+* **Enhanced tool usage**: The model more effectively uses parallel tool calls, firing off multiple speculative searches simultaneously during research and reading several files at once to build context faster. Improved coordination across multiple tools and information sources enables the model to effectively leverage a wide range of capabilities in agentic search and coding workflows.
+* **Advanced context management**: Sonnet 4.5 maintains exceptional state tracking in external files, preserving goal-orientation across sessions. Combined with more effective context window usage and our new context management API features, the model optimally handles information across extended sessions to maintain coherence over time.
+
+### Communication and interaction style
+
+Claude Sonnet 4.5 has a refined communication approach that is concise, direct, and natural. It provides fact-based progress updates and may skip verbose summaries after tool calls to maintain workflow momentum (though this can be adjusted with prompting).
+
+For detailed guidance on working with this communication style, see [Claude 4 best practices](/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices).
+
+### Creative content generation
+
+Claude Sonnet 4.5 excels at creative content tasks:
+
+* **Presentations and animations**: Matches or exceeds Claude Opus 4.1 for creating slides and visual content
+* **Creative flair**: Produces polished, professional output with strong instruction following
+* **First-try quality**: Generates usable, well-designed content in initial attempts
+
+## New API features
+
+### Memory tool (Beta)
+
+The new [memory tool](/en/docs/agents-and-tools/tool-use/memory-tool) enables Claude to store and retrieve information outside the context window:
+
+```python
+tools=[
+    {
+        "type": "memory_20250818",
+        "name": "memory"
+    }
+]
+```
+
+This allows for:
+
+* Building knowledge bases over time
+* Maintaining project state across sessions
+* Preserving effectively unlimited context through file-based storage
+
+Requires [beta header](/en/api/beta-headers): `context-management-2025-06-27`
+
+### Context editing
+
+Claude Sonnet 4.5 introduces [context editing](/en/docs/build-with-claude/context-editing) for intelligent context management through automatic tool call clearing:
+
+```python
+response = client.beta.messages.create(
+    betas=["context-management-2025-06-27"],
+    model="claude-sonnet-4-5",
+    max_tokens=4096,
+    messages=[{"role": "user", "content": "..."}],
+    context_management={
+        "edits": [
+            {
+                "type": "clear_tool_uses_20250919",
+                "trigger": {"type": "input_tokens", "value": 500},
+                "keep": {"type": "tool_uses", "value": 2},
+                "clear_at_least": {"type": "input_tokens", "value": 100}
+            }
+        ]
+    },
+    tools=[...]
+)
+```
+
+This feature automatically removes older tool calls and results when approaching token limits, helping manage context in long-running agent sessions.
+
+### Enhanced stop reasons
+
+Claude Sonnet 4.5 introduces a new `model_context_window_exceeded` stop reason that explicitly indicates when generation stopped due to hitting the context window limit, rather than the requested `max_tokens` limit. This makes it easier to handle context window limits in your application logic.
+
+```json
+{
+  "stop_reason": "model_context_window_exceeded",
+  "usage": {
+    "input_tokens": 150000,
+    "output_tokens": 49950
+  }
+}
+```
+
+### Improved tool parameter handling
+
+Claude Sonnet 4.5 includes a bug fix that preserves intentional formatting in tool call string parameters. Previously, trailing newlines in string parameters were sometimes incorrectly stripped. This fix ensures that tools requiring precise formatting (like text editors) receive parameters exactly as intended.
+
+<Note>
+  This is a behind-the-scenes improvement with no API changes required. However, tools with string parameters may now receive values with trailing newlines that were previously stripped.
+</Note>
+
+**Example:**
+
+```json
+// Before: Final newline accidentally stripped
+{
+  "type": "tool_use",
+  "id": "toolu_01A09q90qw90lq917835lq9",
+  "name": "edit_todo",
+  "input": {
+    "file": "todo.txt",
+    "contents": "1. Chop onions.\n2. ???\n3. Profit"
+  }
+}
+
+// After: Trailing newline preserved as intended
+{
+  "type": "tool_use",
+  "id": "toolu_01A09q90qw90lq917835lq9",
+  "name": "edit_todo",
+  "input": {
+    "file": "todo.txt",
+    "contents": "1. Chop onions.\n2. ???\n3. Profit\n"
+  }
+}
+```
+
+### Token count optimizations
+
+Claude Sonnet 4.5 includes automatic optimizations to improve model performance. These optimizations may add small amounts of tokens to requests, but **you are not billed for these system-added tokens**.
+
+## Pricing and availability
+
+### Pricing
+
+Claude Sonnet 4.5 maintains the same pricing as Sonnet 4:
+
+* **Input**: \$3 per million tokens
+* **Output**: \$15 per million tokens
+
+### Availability
+
+Claude Sonnet 4.5 is available on:
+
+* **Claude API**: `claude-sonnet-4-5-20250929`
+* **Amazon Bedrock**: `anthropic.claude-sonnet-4-5-20250929-v1:0`
+* **Google Cloud Vertex AI**: `claude-sonnet-4-5@20250929`
+
+Also available through Claude.ai and Claude Code platforms.
+
+## Migration guide
+
+If you're currently using Claude Sonnet 4, upgrading to Sonnet 4.5 is straightforward:
+
+1. Update your model name to `claude-sonnet-4-5-20250929`
+2. Existing API calls will continue to work<sup>\*</sup>
+3. Consider enabling new features:
+   * Memory tool for long-running agents
+   * Tool call clearing for better context management
+
+See [Migrating to Claude 4](/en/docs/about-claude/models/migrating-to-claude-4) for detailed migration instructions if migrating to Sonnet 4.5 from a Claude 3 model.
+
+*<sup>\* - Sonnet 4.5 does not allow both `temperature` and `top_p` parameters to be specified. Please use only one.</sup>*
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Best practices" icon="lightbulb" href="/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices">
+    Learn prompt engineering techniques for Sonnet 4.5
+  </Card>
+
+  <Card title="Model overview" icon="table" href="/en/docs/about-claude/models/overview">
+    Compare Sonnet 4.5 with other Claude models
+  </Card>
+
+  <Card title="Migration guide" icon="arrow-right-arrow-left" href="/en/docs/about-claude/models/migrating-to-claude-4">
+    Upgrade from previous models
+  </Card>
+</CardGroup>
+
+
+Models & pricing
+What's new in Claude Sonnet 4.5
+
+Copy page
+
+Claude Sonnet 4.5 is our best model for building complex agents that can work independently for extended periods. It advances the frontier in coding capabilities, achieves state-of-the-art performance in computer use, and excels at powering agents for financial analysis, cybersecurity, and research applications.
+
+​
+Key improvements over Sonnet 4
+​
+Coding excellence
+Claude Sonnet 4.5 is our best coding model to date, with significant improvements across the entire development lifecycle:
+SWE-bench Verified performance: Advanced state-of-the-art on coding benchmarks
+Enhanced planning and system design: Better architectural decisions and code organization
+Improved security engineering: More robust security practices and vulnerability detection
+Better instruction following: More precise adherence to coding specifications and requirements
+Extended thinking for optimal performance: Claude Sonnet 4.5 performs significantly better on coding tasks when extended thinking is enabled. Extended thinking is disabled by default, but we recommend enabling it for complex coding work. Be aware that extended thinking impacts prompt caching efficiency. See the migration guide for configuration details.
+​
+Agent capabilities
+Claude Sonnet 4.5 introduces major advances in agent capabilities:
+Extended autonomous operation: Sonnet 4.5 can work independently for hours while maintaining clarity and focus on incremental progress. The model makes steady advances on a few tasks at a time rather than attempting everything at once. It provides fact-based progress updates that accurately reflect what has been accomplished.
+Context awareness: Claude now tracks its token usage throughout conversations, receiving updates after each tool call. This awareness helps prevent premature task abandonment and enables more effective execution on long-running tasks. See Context awareness for technical details and prompting guidance.
+Enhanced tool usage: The model more effectively uses parallel tool calls, firing off multiple speculative searches simultaneously during research and reading several files at once to build context faster. Improved coordination across multiple tools and information sources enables the model to effectively leverage a wide range of capabilities in agentic search and coding workflows.
+Advanced context management: Sonnet 4.5 maintains exceptional state tracking in external files, preserving goal-orientation across sessions. Combined with more effective context window usage and our new context management API features, the model optimally handles information across extended sessions to maintain coherence over time.
+​
+Communication and interaction style
+Claude Sonnet 4.5 has a refined communication approach that is concise, direct, and natural. It provides fact-based progress updates and may skip verbose summaries after tool calls to maintain workflow momentum (though this can be adjusted with prompting).
+For detailed guidance on working with this communication style, see Claude 4 best practices.
+​
+Creative content generation
+Claude Sonnet 4.5 excels at creative content tasks:
+Presentations and animations: Matches or exceeds Claude Opus 4.1 for creating slides and visual content
+Creative flair: Produces polished, professional output with strong instruction following
+First-try quality: Generates usable, well-designed content in initial attempts
+​
+New API features
+​
+Memory tool (Beta)
+The new memory tool enables Claude to store and retrieve information outside the context window:
+
+Copy
+tools=[
+    {
+        "type": "memory_20250818",
+        "name": "memory"
+    }
+]
+This allows for:
+Building knowledge bases over time
+Maintaining project state across sessions
+Preserving effectively unlimited context through file-based storage
+Requires beta header: context-management-2025-06-27
+​
+Context editing
+Claude Sonnet 4.5 introduces context editing for intelligent context management through automatic tool call clearing:
+
+Copy
+response = client.beta.messages.create(
+    betas=["context-management-2025-06-27"],
+    model="claude-sonnet-4-5",
+    max_tokens=4096,
+    messages=[{"role": "user", "content": "..."}],
+    context_management={
+        "edits": [
+            {
+                "type": "clear_tool_uses_20250919",
+                "trigger": {"type": "input_tokens", "value": 500},
+                "keep": {"type": "tool_uses", "value": 2},
+                "clear_at_least": {"type": "input_tokens", "value": 100}
+            }
+        ]
+    },
+    tools=[...]
+)
+This feature automatically removes older tool calls and results when approaching token limits, helping manage context in long-running agent sessions.
+​
+Enhanced stop reasons
+Claude Sonnet 4.5 introduces a new model_context_window_exceeded stop reason that explicitly indicates when generation stopped due to hitting the context window limit, rather than the requested max_tokens limit. This makes it easier to handle context window limits in your application logic.
+
+Copy
+{
+  "stop_reason": "model_context_window_exceeded",
+  "usage": {
+    "input_tokens": 150000,
+    "output_tokens": 49950
+  }
+}
+​
+Improved tool parameter handling
+Claude Sonnet 4.5 includes a bug fix that preserves intentional formatting in tool call string parameters. Previously, trailing newlines in string parameters were sometimes incorrectly stripped. This fix ensures that tools requiring precise formatting (like text editors) receive parameters exactly as intended.
+This is a behind-the-scenes improvement with no API changes required. However, tools with string parameters may now receive values with trailing newlines that were previously stripped.
+Example:
+
+Copy
+// Before: Final newline accidentally stripped
+{
+  "type": "tool_use",
+  "id": "toolu_01A09q90qw90lq917835lq9",
+  "name": "edit_todo",
+  "input": {
+    "file": "todo.txt",
+    "contents": "1. Chop onions.\n2. ???\n3. Profit"
+  }
+}
+
+// After: Trailing newline preserved as intended
+{
+  "type": "tool_use",
+  "id": "toolu_01A09q90qw90lq917835lq9",
+  "name": "edit_todo",
+  "input": {
+    "file": "todo.txt",
+    "contents": "1. Chop onions.\n2. ???\n3. Profit\n"
+  }
+}
+​
+Token count optimizations
+Claude Sonnet 4.5 includes automatic optimizations to improve model performance. These optimizations may add small amounts of tokens to requests, but you are not billed for these system-added tokens.
+​
+Pricing and availability
+​
+Pricing
+Claude Sonnet 4.5 maintains the same pricing as Sonnet 4:
+Input: $3 per million tokens
+Output: $15 per million tokens
+​
+Availability
+Claude Sonnet 4.5 is available on:
+Claude API: claude-sonnet-4-5-20250929
+Amazon Bedrock: anthropic.claude-sonnet-4-5-20250929-v1:0
+Google Cloud Vertex AI: claude-sonnet-4-5@20250929
+Also available through Claude.ai and Claude Code platforms.
+​
+Migration guide
+If you’re currently using Claude Sonnet 4, upgrading to Sonnet 4.5 is straightforward:
+Update your model name to claude-sonnet-4-5-20250929
+Existing API calls will continue to work*
+Consider enabling new features:
+Memory tool for long-running agents
+Tool call clearing for better context management
+See Migrating to Claude 4 for detailed migration instructions if migrating to Sonnet 4.5 from a Claude 3 model.
+* - Sonnet 4.5 does not allow both temperature and top_p parameters to be specified. Please use only one.

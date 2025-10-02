@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
         }
     };
 
-    let finalTemperature;
+    let finalTemperature: number | undefined;
     if (reasoningPreset) {
       finalTemperature = REASONING_PRESET_TO_TEMP[reasoningPreset];
     } else if (temperaturePreset) {
@@ -350,6 +350,67 @@ export async function POST(req: NextRequest) {
           const result = await streamText({ ...streamTextConfig, model: getOpenAIProvider()(modelId) });
           return result.toDataStreamResponse();
       } else if (modelId.startsWith('claude')) {
+          // Claude Sonnet 4.5 requires special handling with Anthropic SDK directly
+          if (modelId === 'claude-sonnet-4-5') {
+            const Anthropic = (await import('@anthropic-ai/sdk')).default;
+            const anthropic = new Anthropic({
+              apiKey: process.env.LLM_GCP_ANTHROPIC_API_KEY,
+            });
+
+            const encoder = new TextEncoder();
+            const stream = new ReadableStream({
+              async start(controller) {
+                try {
+                  const anthropicStream = await anthropic.messages.stream({
+                    model: 'claude-sonnet-4-5-20250929',
+                    max_tokens: maxTokens || 64000,
+                    temperature: finalTemperature || 0.6,
+                    system: systemPrompt || 'You are a helpful assistant.',
+                    messages: processedMessages.map(m => ({
+                      role: m.role as 'user' | 'assistant',
+                      content: typeof m.content === 'string' ? m.content : 
+                               Array.isArray(m.content) ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : '',
+                    })),
+                  });
+
+                  let inputTokens = 0;
+                  let outputTokens = 0;
+
+                  for await (const event of anthropicStream) {
+                    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                      controller.enqueue(encoder.encode(`0:${JSON.stringify(event.delta.text)}\n`));
+                    } else if (event.type === 'message_start') {
+                      inputTokens = event.message.usage.input_tokens;
+                      console.log('[DEBUG] Anthropic API Response - Model:', event.message.model);
+                    } else if (event.type === 'message_delta') {
+                      outputTokens = event.usage.output_tokens;
+                    }
+                  }
+
+                  // Update usage tracking
+                  const pricing = pricingPerMillionTokensUSD[modelId];
+                  if (pricing) {
+                    await usageTracker.updateUsage(modelId, inputTokens, outputTokens, pricing);
+                  }
+
+                  controller.close();
+                } catch (error) {
+                  console.error('[ERROR] Claude Sonnet 4.5 error:', error);
+                  controller.enqueue(encoder.encode(`3:${JSON.stringify(error instanceof Error ? error.message : 'An error occurred')}\n`));
+                  controller.close();
+                }
+              },
+            });
+
+            return new Response(stream, {
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Transfer-Encoding': 'chunked',
+              },
+            });
+          }
+          
+          // Other Claude models use AI SDK v4
           const claudeModelMap: { [key: string]: string } = { 'claude-sonnet4': 'claude-sonnet-4-20250514' };
           const anthropicModelId = claudeModelMap[modelId] || modelId;
           const result = await streamText({ ...streamTextConfig, model: getAnthropicProvider()(anthropicModelId), system: systemPrompt || 'You are a helpful assistant.' });
