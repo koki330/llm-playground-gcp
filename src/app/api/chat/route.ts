@@ -353,6 +353,7 @@ export async function POST(req: NextRequest) {
           // Claude Sonnet 4.5 requires special handling with Anthropic SDK directly
           if (modelId === 'claude-sonnet-4-5') {
             const Anthropic = (await import('@anthropic-ai/sdk')).default;
+            
             const anthropic = new Anthropic({
               apiKey: process.env.LLM_GCP_ANTHROPIC_API_KEY,
             });
@@ -366,11 +367,50 @@ export async function POST(req: NextRequest) {
                     max_tokens: maxTokens || 64000,
                     temperature: finalTemperature || 0.6,
                     system: systemPrompt || 'You are a helpful assistant.',
-                    messages: processedMessages.map(m => ({
-                      role: m.role as 'user' | 'assistant',
-                      content: typeof m.content === 'string' ? m.content : 
-                               Array.isArray(m.content) ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : '',
-                    })),
+                    messages: processedMessages.map(m => {
+                      // Handle multimodal content
+                      if (Array.isArray(m.content)) {
+                        const anthropicContent: Array<{type: 'text'; text: string} | {type: 'image'; source: {type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'; data: string}}> = [];
+                        
+                        for (const part of m.content) {
+                          if (part.type === 'text' && 'text' in part) {
+                            anthropicContent.push({ type: 'text', text: part.text });
+                          } else if (part.type === 'image' && 'image' in part && typeof part.image === 'string') {
+                            // Extract base64 data and media type from data URL
+                            const dataUrl = part.image;
+                            const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                            if (matches) {
+                              let mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/png';
+                              const extractedType = matches[1];
+                              if (extractedType === 'image/jpeg' || extractedType === 'image/png' || 
+                                  extractedType === 'image/gif' || extractedType === 'image/webp') {
+                                mediaType = extractedType;
+                              }
+                              const base64Data = matches[2];
+                              anthropicContent.push({
+                                type: 'image',
+                                source: {
+                                  type: 'base64',
+                                  media_type: mediaType,
+                                  data: base64Data
+                                }
+                              });
+                            }
+                          }
+                        }
+                        
+                        return {
+                          role: m.role as 'user' | 'assistant',
+                          content: anthropicContent
+                        };
+                      }
+                      
+                      // Handle string content
+                      return {
+                        role: m.role as 'user' | 'assistant',
+                        content: typeof m.content === 'string' ? m.content : ''
+                      };
+                    }) as Parameters<typeof anthropic.messages.stream>[0]['messages'],
                   });
 
                   let inputTokens = 0;
