@@ -23,6 +23,8 @@ interface ModelConfigData {
 interface UsageInfo {
   limit: number | null;
   total_cost: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
   isLimited: boolean;
   usageWarning: string | null;
 }

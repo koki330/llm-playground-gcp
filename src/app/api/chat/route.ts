@@ -70,10 +70,19 @@ const usageTracker = {
         const hours = now.getHours().toString().padStart(2, '0');
         const minutes = now.getMinutes().toString().padStart(2, '0');
         const lastUpdatedTimestamp = `${year}/${month}/${day}/${hours}:${minutes}`;
-        await docRef.set({ total_cost: 0, year_month, daily_costs: {}, last_updated: lastUpdatedTimestamp });
-        return { total_cost: 0, year_month };
+        await docRef.set({ 
+          total_cost: 0, 
+          total_input_tokens: 0,
+          total_output_tokens: 0,
+          year_month, 
+          daily_costs: {},
+          daily_input_tokens: {},
+          daily_output_tokens: {},
+          last_updated: lastUpdatedTimestamp 
+        });
+        return { total_cost: 0, total_input_tokens: 0, total_output_tokens: 0, year_month };
       }
-      return doc.data() as { total_cost: number; year_month: string };
+      return doc.data() as { total_cost: number; total_input_tokens: number; total_output_tokens: number; year_month: string };
     },
         updateUsage: async (modelId: string, inputTokens: number = 0, outputTokens: number = 0, pricing: { input: number; output: number }) => {
                 const safeInputTokens = inputTokens || 0;
@@ -96,8 +105,12 @@ const usageTracker = {
                 // It's a new month, reset the costs.
                 await docRef.set({
                     total_cost: 0,
+                    total_input_tokens: 0,
+                    total_output_tokens: 0,
                     year_month: currentMonth,
                     daily_costs: {},
+                    daily_input_tokens: {},
+                    daily_output_tokens: {},
                     last_updated: ''
                 });
             }
@@ -106,14 +119,20 @@ const usageTracker = {
             // Document does not exist, create it.
             await docRef.set({
                 total_cost: 0,
+                total_input_tokens: 0,
+                total_output_tokens: 0,
                 year_month: currentMonth,
                 daily_costs: {},
+                daily_input_tokens: {},
+                daily_output_tokens: {},
                 last_updated: ''
             });
         }
 
         const today = new Date().toISOString().slice(0, 10);
         const dailyCostField = `daily_costs.${today}`;
+        const dailyInputTokensField = `daily_input_tokens.${today}`;
+        const dailyOutputTokensField = `daily_output_tokens.${today}`;
         const now = new Date();
         const year = now.getFullYear();
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -124,7 +143,11 @@ const usageTracker = {
         
         await docRef.update({
           total_cost: FieldValue.increment(requestCost),
+          total_input_tokens: FieldValue.increment(safeInputTokens),
+          total_output_tokens: FieldValue.increment(safeOutputTokens),
           [dailyCostField]: FieldValue.increment(requestCost),
+          [dailyInputTokensField]: FieldValue.increment(safeInputTokens),
+          [dailyOutputTokensField]: FieldValue.increment(safeOutputTokens),
           last_updated: lastUpdatedTimestamp,
         });
     },
