@@ -156,12 +156,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const data = await response.json();
       let usageWarning: string | null = null;
       let isLimited = false;
-      if (data.limit !== null) {
-        if (data.total_cost >= data.limit) {
-          usageWarning = '利用上限に達しました。別のモデルを使用してください。';
+      if (data.limit !== null && data.total_cost > 0) { // Only show warning if there is usage
+        const percentage = Math.round((data.total_cost / data.limit) * 100);
+        if (percentage >= 100) {
+          usageWarning = `【利用上限超過】このモデルは月の利用上限に達しました。`;
           isLimited = true;
-        } else if (data.total_cost >= data.limit * 0.8) {
-          usageWarning = '利用上限の8割に到達しました。';
+        } else if (percentage >= 80) {
+          usageWarning = `【警告】月の利用上限の${percentage}%に達しています。`;
         }
       }
       setUsageInfo({ ...data, isLimited, usageWarning });

@@ -215,7 +215,7 @@ const Sidebar = () => {
         <select
           value={selectedModel}
           onChange={(e) => setSelectedModel(e.target.value)}
-          disabled={isLoading || usageInfo?.isLimited}
+          disabled={isLoading}
           className="w-full p-2 rounded-lg bg-white border border-[#E0E0E0] text-black focus:outline-none focus:ring-2 focus:ring-[#A61C4B] disabled:opacity-50"
         >
           {modelGroups.map(group => (

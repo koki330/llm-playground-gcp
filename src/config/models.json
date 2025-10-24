@@ -43,8 +43,11 @@
     "gemini-2.5-flash": { "type": "normal", "maxTokens": 65536 }
   },
   "monthlyLimitsUSD": {
-    "claude-sonnet4": 120,
-    "o3": 300
+    "gpt-4.1": 500,
+    "gemini-2.5-pro": 500,
+    "claude-sonnet-4-5": 300,
+    "gpt-5": 200,
+    "o3": 100
   },
   "pricingPerMillionTokensUSD": {
     "claude-sonnet4": { "input": 3, "output": 15 },

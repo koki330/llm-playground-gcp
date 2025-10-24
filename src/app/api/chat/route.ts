@@ -232,8 +232,14 @@ export async function POST(req: NextRequest) {
     const limit = monthlyLimitsUSD[modelId];
     if (limit) {
       const usage = await usageTracker.getUsage(modelId);
-      if (usage.total_cost >= limit) {
-        return NextResponse.json({ error: `Monthly usage limit of $${limit} for ${modelId} has been reached.` }, { status: 429 });
+      const usagePercentage = (usage.total_cost / limit) * 100;
+
+      if (usagePercentage >= 100) {
+        return NextResponse.json({ error: `【利用上限超過】\n\nモデル「${modelId}」は、月間の利用上限額（${limit}）に達したため、現在ご利用いただけません。\n\n管理者にご確認ください。` }, { status: 429 });
+      }
+      
+      if (usagePercentage >= 80) {
+        console.log(`[USAGE WARNING] Model ${modelId} has reached ${usagePercentage.toFixed(0)}% of its monthly usage limit (${limit}).`);
       }
     }
 
