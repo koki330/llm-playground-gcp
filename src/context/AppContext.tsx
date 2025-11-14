@@ -61,8 +61,8 @@ interface AppContextType {
   isWebSearchEnabled: boolean;
   setIsWebSearchEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   modelGroups: { label: string; models: Record<string, string> }[];
-  gpt5ReasoningEffort: 'minimal' | 'low' | 'medium' | 'high';
-  setGpt5ReasoningEffort: React.Dispatch<React.SetStateAction<'minimal' | 'low' | 'medium' | 'high'>>;
+  gpt5ReasoningEffort: 'none' | 'minimal' | 'low' | 'medium' | 'high';
+  setGpt5ReasoningEffort: React.Dispatch<React.SetStateAction<'none' | 'minimal' | 'low' | 'medium' | 'high'>>;
   gpt5Verbosity: 'low' | 'medium' | 'high';
   setGpt5Verbosity: React.Dispatch<React.SetStateAction<'low' | 'medium' | 'high'>>;
 }
@@ -84,7 +84,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [maxTokens, setMaxTokens] = useState(4096);
   const [reasoningPreset, setReasoningPreset] = useState<ReasoningPreset>('middle');
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
-  const [gpt5ReasoningEffort, setGpt5ReasoningEffort] = useState<'minimal' | 'low' | 'medium' | 'high'>('medium');
+  const [gpt5ReasoningEffort, setGpt5ReasoningEffort] = useState<'none' | 'minimal' | 'low' | 'medium' | 'high'>('medium');
   const [gpt5Verbosity, setGpt5Verbosity] = useState<'low' | 'medium' | 'high'>('medium');
 
   const currentModelConfig = modelConfigData?.modelConfig[selectedModel];

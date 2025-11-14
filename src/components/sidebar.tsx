@@ -80,14 +80,25 @@ const Sidebar = () => {
             <select
               id="gpt5ReasoningEffort"
               value={gpt5ReasoningEffort}
-              onChange={(e) => setGpt5ReasoningEffort(e.target.value as 'minimal' | 'low' | 'medium' | 'high')}
+              onChange={(e) => setGpt5ReasoningEffort(e.target.value as 'none' | 'minimal' | 'low' | 'medium' | 'high')}
               className="w-full p-2 mt-1 bg-white border border-[#E0E0E0] rounded-md text-black"
               disabled={isLoading}
             >
-              <option value="minimal">Minimal</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
+              {selectedModel === 'gpt-5.1' ? (
+                <>
+                  <option value="none">None</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </>
+              ) : (
+                <>
+                  <option value="minimal">Minimal</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </>
+              )}
             </select>
           </div>
           <div>

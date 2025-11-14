@@ -48,7 +48,7 @@ export async function getGpt5Response(params: Gpt5Params): Promise<Gpt5Result> {
             model,
             input: [{ role: "user", content }],
             instructions: systemPrompt,
-            reasoning: { effort: reasoning },
+            reasoning: reasoning === "none" ? undefined : { effort: reasoning as "minimal" | "low" | "medium" | "high" },
             text: { verbosity },
         });
 
@@ -95,7 +95,7 @@ export async function streamGpt5Response(params: Gpt5Params & {
             model: modelToUse,
             input: [{ role: "user", content }],
             instructions: systemPrompt,
-            reasoning: { effort: reasoning },
+            reasoning: reasoning === "none" ? undefined : { effort: reasoning as "minimal" | "low" | "medium" | "high" },
             text: { verbosity },
         });
 

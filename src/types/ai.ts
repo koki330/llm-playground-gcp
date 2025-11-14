@@ -1,4 +1,4 @@
-export type Effort = "minimal" | "low" | "medium" | "high";
+export type Effort = "none" | "minimal" | "low" | "medium" | "high";
 export type Verbosity = "low" | "medium" | "high";
 
 // Vercel AI SDK で使うメッセージパート
