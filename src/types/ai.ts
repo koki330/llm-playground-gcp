@@ -1,5 +1,6 @@
 export type Effort = "none" | "minimal" | "low" | "medium" | "high";
 export type Verbosity = "low" | "medium" | "high";
+export type Gemini3ThinkingLevel = "low" | "high";
 
 // Vercel AI SDK で使うメッセージパート
 export interface AiTextPart { type: "text"; text: string }
