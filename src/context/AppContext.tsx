@@ -17,7 +17,7 @@ export type TemperaturePreset = 'precise' | 'balanced' | 'creative';
 // Type for the configuration data fetched from the API
 interface ModelConfigData {
   modelGroups: { label: string; models: Record<string, string> }[];
-  modelConfig: Record<string, { type: 'reasoning' | 'normal' | 'gpt5'; maxTokens: number }>;
+  modelConfig: Record<string, { type: 'reasoning' | 'normal' | 'gpt5' | 'gemini3'; maxTokens: number }>;
 }
 
 interface UsageInfo {
@@ -57,7 +57,7 @@ interface AppContextType {
   setMaxTokens: React.Dispatch<React.SetStateAction<number>>;
   reasoningPreset: ReasoningPreset;
   setReasoningPreset: React.Dispatch<React.SetStateAction<ReasoningPreset>>;
-  currentModelConfig: { type: 'reasoning' | 'normal' | 'gpt5', maxTokens: number } | undefined;
+  currentModelConfig: { type: 'reasoning' | 'normal' | 'gpt5' | 'gemini3', maxTokens: number } | undefined;
   isWebSearchEnabled: boolean;
   setIsWebSearchEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   modelGroups: { label: string; models: Record<string, string> }[];
@@ -65,6 +65,10 @@ interface AppContextType {
   setGpt5ReasoningEffort: React.Dispatch<React.SetStateAction<'none' | 'minimal' | 'low' | 'medium' | 'high'>>;
   gpt5Verbosity: 'low' | 'medium' | 'high';
   setGpt5Verbosity: React.Dispatch<React.SetStateAction<'low' | 'medium' | 'high'>>;
+  gemini3ThinkingLevel: 'low' | 'high';
+  setGemini3ThinkingLevel: React.Dispatch<React.SetStateAction<'low' | 'high'>>;
+  gpt5GroundingEnabled: boolean;
+  setGpt5GroundingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -86,6 +90,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
   const [gpt5ReasoningEffort, setGpt5ReasoningEffort] = useState<'none' | 'minimal' | 'low' | 'medium' | 'high'>('medium');
   const [gpt5Verbosity, setGpt5Verbosity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [gemini3ThinkingLevel, setGemini3ThinkingLevel] = useState<'low' | 'high'>('high');
+  const [gpt5GroundingEnabled, setGpt5GroundingEnabled] = useState(false);
 
   const currentModelConfig = modelConfigData?.modelConfig[selectedModel];
   const modelGroups = modelConfigData?.modelGroups || [];
@@ -134,6 +140,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       webSearchEnabled: isWebSearchEnabled,
       gpt5ReasoningEffort: selectedModel.startsWith('gpt-5') ? gpt5ReasoningEffort : undefined,
       gpt5Verbosity: selectedModel.startsWith('gpt-5') ? gpt5Verbosity : undefined,
+      gpt5GroundingEnabled: selectedModel.startsWith('gpt-5') ? gpt5GroundingEnabled : undefined,
+      gemini3ThinkingLevel: selectedModel === 'gemini-3-pro-preview' ? gemini3ThinkingLevel : undefined,
       // imageUri is now passed directly in submitPrompt
     },
     onError: (err) => {
@@ -176,6 +184,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (selectedModel && modelConfigData) {
       fetchUsage(selectedModel);
       setIsWebSearchEnabled(false);
+      setGpt5GroundingEnabled(false);
       const newMax = modelConfigData.modelConfig[selectedModel]?.maxTokens;
       if (newMax) {
         setMaxTokens(newMax);
@@ -268,6 +277,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setGpt5ReasoningEffort,
         gpt5Verbosity,
         setGpt5Verbosity,
+        gemini3ThinkingLevel,
+        setGemini3ThinkingLevel,
+        gpt5GroundingEnabled,
+        setGpt5GroundingEnabled,
     }}>
       {children}
     </AppContext.Provider>

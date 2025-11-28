@@ -19,6 +19,7 @@ export interface Gpt5Params {
     reasoning?: Effort;
     verbosity?: Verbosity;
     systemPrompt?: string;
+    groundingEnabled?: boolean;
 }
 
 export interface Gpt5Result {
@@ -44,13 +45,29 @@ export async function getGpt5Response(params: Gpt5Params): Promise<Gpt5Result> {
     }
 
     try {
-        const res = await client.responses.create({
+        const requestBody: {
+            model: string;
+            input: Array<{ role: "user"; content: UserContentPart[] }>;
+            instructions?: string;
+            reasoning?: { effort: "minimal" | "low" | "medium" | "high" };
+            text?: { verbosity: Verbosity };
+            tools?: Array<{ type: "web_search" }>;
+        } = {
             model,
             input: [{ role: "user", content }],
             instructions: systemPrompt,
             reasoning: reasoning === "none" ? undefined : { effort: reasoning as "minimal" | "low" | "medium" | "high" },
             text: { verbosity },
-        });
+        };
+
+        // Add tools parameter if grounding is enabled
+        if (params.groundingEnabled) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            requestBody.tools = [{ type: "web_search" }] as any;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const res = await client.responses.create(requestBody as any);
 
         return { text: res.output_text ?? "", usage: res.usage as Usage | undefined };
     } catch (e) {
@@ -91,13 +108,29 @@ export async function streamGpt5Response(params: Gpt5Params & {
     const encoder = new TextEncoder();
 
     async function run(modelToUse: string): Promise<ReadableStream<Uint8Array>> {
-        const stream = await client.responses.stream({
+        const requestBody: {
+            model: string;
+            input: Array<{ role: "user"; content: UserContentPart[] }>;
+            instructions?: string;
+            reasoning?: { effort: "minimal" | "low" | "medium" | "high" };
+            text?: { verbosity: Verbosity };
+            tools?: Array<{ type: "web_search" }>;
+        } = {
             model: modelToUse,
             input: [{ role: "user", content }],
             instructions: systemPrompt,
             reasoning: reasoning === "none" ? undefined : { effort: reasoning as "minimal" | "low" | "medium" | "high" },
             text: { verbosity },
-        });
+        };
+
+        // Add tools parameter if grounding is enabled
+        if (params.groundingEnabled) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            requestBody.tools = [{ type: "web_search" }] as any;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const stream = await client.responses.stream(requestBody as any);
 
         return new ReadableStream<Uint8Array>({
             async start(controller) {

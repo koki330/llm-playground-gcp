@@ -32,6 +32,10 @@ const Sidebar = () => {
     setGpt5ReasoningEffort,
     gpt5Verbosity,
     setGpt5Verbosity,
+    gemini3ThinkingLevel,
+    setGemini3ThinkingLevel,
+    gpt5GroundingEnabled,
+    setGpt5GroundingEnabled,
   } = useAppContext();
 
   const MIN_GEMINI_TOKENS = 2000;
@@ -69,6 +73,26 @@ const Sidebar = () => {
     if (isConfigLoading || !currentModelConfig) {
       return (
         <div className="text-sm text-gray-400">モデル設定を読み込み中...</div>
+      );
+    }
+
+    if (currentModelConfig.type === 'gemini3') {
+      return (
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="gemini3ThinkingLevel" className="block text-sm font-medium text-gray-700">思考レベル</label>
+            <select
+              id="gemini3ThinkingLevel"
+              value={gemini3ThinkingLevel}
+              onChange={(e) => setGemini3ThinkingLevel(e.target.value as 'low' | 'high')}
+              className="w-full p-2 mt-1 bg-white border border-[#E0E0E0] rounded-md text-black"
+              disabled={isLoading}
+            >
+              <option value="high">高</option>
+              <option value="low">低</option>
+            </select>
+          </div>
+        </div>
       );
     }
 
@@ -114,6 +138,28 @@ const Sidebar = () => {
               <option value="medium">中</option>
               <option value="high">高</option>
             </select>
+          </div>
+
+          <div className="pt-4 border-t border-[#E0E0E0]">
+            <h3 className="flex items-center gap-2 text-md font-semibold mb-3 text-gray-800">
+              <Globe size={18} />
+              Tools
+            </h3>
+            <div className="flex items-center justify-between">
+              <label htmlFor="gpt5Grounding" className="text-sm font-medium text-gray-800">Web検索を有効にする</label>
+              <input
+                type="checkbox"
+                id="gpt5Grounding"
+                checked={gpt5GroundingEnabled}
+                onChange={(e) => setGpt5GroundingEnabled(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-[#A61C4B] focus:ring-[#A61C4B]"
+                disabled={isLoading}
+              />
+            </div>
+            <div className="mt-3 flex items-start gap-2 p-2 text-xs text-red-800 bg-red-100 border border-red-200 rounded-lg">
+              <AlertTriangle size={24} className="flex-shrink-0" />
+              <span>Web検索機能は公開情報を対象とします。機密情報や個人情報は入力しないでください。</span>
+            </div>
           </div>
         </div>
       );

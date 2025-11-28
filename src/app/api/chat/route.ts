@@ -5,6 +5,7 @@ import { getOpenAIProvider } from '@/services/openai';
 import { getAnthropicProvider } from '@/services/anthropic';
 import { getGoogleProvider } from '@/services/vertexai';
 import { streamGpt5Response } from '@/services/openai-gpt5';
+import { streamGemini3Response } from '@/services/vertexai-gemini3';
 import { firestore } from '@/services/firestore';
 import { FieldValue } from '@google-cloud/firestore';
 import { getModelsConfig } from '@/config/modelConfig';
@@ -23,6 +24,8 @@ interface ChatRequestBody {
   imageUri?: string; // Added for image URI
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   gpt5Verbosity?: 'low' | 'medium' | 'high';
+  gpt5GroundingEnabled?: boolean;
+  gemini3ThinkingLevel?: 'low' | 'high';
 }
 
 // Extend CoreMessage to include an optional 'parts' property for type safety
@@ -335,7 +338,7 @@ export async function POST(req: NextRequest) {
       const selectedModelConfig = modelConfig[modelId];
 
       if (selectedModelConfig && selectedModelConfig.service === 'gpt5') {
-        const { gpt5ReasoningEffort, gpt5Verbosity } = body;
+        const { gpt5ReasoningEffort, gpt5Verbosity, gpt5GroundingEnabled } = body;
         const lastMessage = processedMessages[processedMessages.length - 1];
 
         let inputText = "";
@@ -363,6 +366,7 @@ export async function POST(req: NextRequest) {
             imageUrlOrDataUrl: imageFromMsg,
             reasoning: gpt5ReasoningEffort || "low",
             verbosity: gpt5Verbosity || "low",
+            groundingEnabled: gpt5GroundingEnabled || false,
             systemPrompt: systemPrompt,
             onUsage: async (usage) => {
                 if (!pricing) return;
@@ -485,7 +489,57 @@ export async function POST(req: NextRequest) {
           const result = await streamText({ ...streamTextConfig, model: getAnthropicProvider()(anthropicModelId), system: systemPrompt || 'You are a helpful assistant.' });
           return result.toDataStreamResponse();
       } else if (modelId.startsWith('gemini')) {
-          // --- Gemini Specific Parameter Adjustment ---
+          console.log(`[DEBUG] Processing Gemini model: ${modelId}`);
+          
+          // Special handling for Gemini 3 Pro Preview
+          if (modelId === 'gemini-3-pro-preview') {
+            console.log('[DEBUG] Using dedicated Gemini 3 service with thinkingConfig');
+            
+            const { gemini3ThinkingLevel } = body;
+            
+            const stream = await streamGemini3Response({
+              model: modelId,
+              messages: processedMessages.map(m => {
+                let content: string | Array<{type: string; text?: string; image?: string}>;
+                
+                if (typeof m.content === 'string') {
+                  content = m.content;
+                } else if (Array.isArray(m.content)) {
+                  content = m.content.map(part => {
+                    if ('text' in part && typeof part.text === 'string') {
+                      return { type: 'text', text: part.text };
+                    } else if ('image' in part) {
+                      // Handle image content
+                      const imageData = typeof part.image === 'string' ? part.image : '';
+                      return { type: 'image', image: imageData };
+                    }
+                    return { type: 'text', text: '' };
+                  }).filter(p => p.text || p.image);
+                } else {
+                  content = '';
+                }
+                
+                return {
+                  role: m.role,
+                  content,
+                };
+              }),
+              systemPrompt: systemPrompt,
+              temperature: finalTemperature,
+              maxTokens: maxTokens,
+              thinkingLevel: gemini3ThinkingLevel || 'high', // Default to 'high' if not specified
+            });
+
+            // Handle usage tracking for Gemini 3
+            // Note: We'll need to get usage from the response metadata
+            // For now, we'll skip usage tracking until we implement it properly
+            
+            return new Response(stream, {
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            });
+          }
+          
+          // --- Gemini Specific Parameter Adjustment (for other Gemini models) ---
           let adjustedMaxTokens = maxTokens;
           let adjustedSystemPrompt = systemPrompt;
 
@@ -533,13 +587,20 @@ export async function POST(req: NextRequest) {
             adjustedMaxTokens = MINIMUM_GEMINI_TOKENS;
           }
 
-          const result = await streamText({ 
-              ...streamTextConfig, 
-              model: getGoogleProvider()(modelId),
-              maxTokens: adjustedMaxTokens,
-              system: adjustedSystemPrompt,
-          });
-          return result.toDataStreamResponse();
+          try {
+            console.log(`[DEBUG] Calling Vertex AI with model: ${modelId}`);
+            const result = await streamText({ 
+                ...streamTextConfig, 
+                model: getGoogleProvider()(modelId),
+                maxTokens: adjustedMaxTokens,
+                system: adjustedSystemPrompt,
+            });
+            return result.toDataStreamResponse();
+          } catch (geminiError) {
+            console.error(`[ERROR] Vertex AI error for model ${modelId}:`, geminiError);
+            console.error('[ERROR] Error details:', JSON.stringify(geminiError, null, 2));
+            throw geminiError;
+          }
       } else {
         return NextResponse.json({ error: `Model ${modelId} not supported yet.` }, { status: 400 });
       }
