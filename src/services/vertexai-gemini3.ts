@@ -10,6 +10,7 @@ interface Gemini3StreamParams {
   temperature?: number;
   maxTokens?: number;
   thinkingLevel?: 'low' | 'high';
+  groundingEnabled?: boolean;
   projectId?: string;
   location?: string;
 }
@@ -22,6 +23,7 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
     temperature = 1.0, // Gemini 3 recommends keeping temperature at 1.0
     maxTokens = 65536,
     thinkingLevel = 'high', // Default to 'high' if not specified
+    groundingEnabled = false,
     projectId = process.env.LLM_GCP_GOOGLE_CLOUD_PROJECT_ID,
     location = 'global', // Gemini 3 Pro Preview only supports 'global' region
   } = params;
@@ -88,6 +90,7 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
     systemInstruction?: {
       parts: Array<{ text: string }>;
     };
+    tools?: Array<{ google_search: Record<string, never> }>;
   } = {
     contents,
     generationConfig: {
@@ -105,10 +108,24 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
     };
   }
 
+  // Add Google Search grounding if enabled
+  if (groundingEnabled) {
+    // Gemini 3 uses 'google_search' field instead of 'googleSearchRetrieval'
+    requestBody.tools = [
+      {
+        google_search: {},
+      } as { google_search: Record<string, never> },
+    ];
+  }
+
   // Gemini 3 uses global endpoint (no region prefix in hostname)
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:streamGenerateContent`;
 
   console.log('[DEBUG] Calling Vertex AI Gemini 3 with endpoint:', endpoint);
+  console.log('[DEBUG] Gemini 3 Request Body:', JSON.stringify(requestBody, null, 2));
+  if (groundingEnabled) {
+    console.log('[DEBUG] Gemini 3 Grounding ENABLED - tools:', JSON.stringify(requestBody.tools, null, 2));
+  }
 
   const response = await fetch(endpoint, {
     method: 'POST',

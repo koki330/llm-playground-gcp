@@ -11,8 +11,7 @@
       "models": {
         "GPT-5.1": "gpt-5.1",
         "GPT-5": "gpt-5",
-        "O3": "o3",
-        "O4-mini": "o4-mini"
+        "O3": "o3"
       }
     },
     {
@@ -41,7 +40,6 @@
     "gpt-5-nano": { "type": "gpt5", "maxTokens": 128000, "service": "gpt5" },
     "gpt-4.1": { "type": "normal", "maxTokens": 32768 },
     "o3": { "type": "reasoning", "maxTokens": 100000 },
-    "o4-mini": { "type": "reasoning", "maxTokens": 100000 },
     "gemini-3-pro-preview": { "type": "gemini3", "maxTokens": 65536 },
     "gemini-2.5-pro": { "type": "normal", "maxTokens": 65536 },
     "gemini-2.5-flash": { "type": "normal", "maxTokens": 65536 }
@@ -63,7 +61,6 @@
     "gpt-5-nano": { "input": 0.05, "output": 0.4 },
     "gpt-4.1": { "input": 2, "output": 8 },
     "o3": { "input": 2, "output": 8 },
-    "o4-mini": { "input": 0.15, "output": 0.6 },
     "gemini-3-pro-preview": { "input": 2, "output": 12 },
     "gemini-2.5-pro": { "input": 1.25, "output": 10 },
     "gemini-2.5-flash": { "input": 0.3, "output": 2.5 }

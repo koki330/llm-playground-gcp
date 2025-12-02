@@ -25,6 +25,7 @@ interface ChatRequestBody {
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   gpt5Verbosity?: 'low' | 'medium' | 'high';
   gpt5GroundingEnabled?: boolean;
+  geminiGroundingEnabled?: boolean;
   gemini3ThinkingLevel?: 'low' | 'high';
 }
 
@@ -32,18 +33,6 @@ interface ChatRequestBody {
 type AppMessage = CoreMessage & {
   parts?: { type: string; text: string }[];
 };
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-    return typeof v === "object" && v !== null;
-}
-function isTextPart(p: unknown): p is { type: "text"; text: string } {
-    return isRecord(p) && p.type === "text" && typeof p.text === "string";
-}
-function isImagePart(p: unknown): p is { type: "image"; image: string } {
-    return isRecord(p) && p.type === "image" && typeof p.image === "string";
-}
-
-
 
 const TEMP_PRESET_MAP: { [key: string]: number } = {
   precise: 0.2,
@@ -278,7 +267,7 @@ export async function POST(req: NextRequest) {
       finalTemperature = TEMP_PRESET_MAP[temperaturePreset];
     }
 
-    if ((modelId === 'o3' || modelId === 'o4-mini') && webSearchEnabled) {
+    if (modelId === 'o3' && webSearchEnabled) {
       // Step 1: Generate a search query based on the text content of the conversation.
       const conversationHistoryForSearch = messages.map(m => `${m.role}: ${Array.isArray(m.content) ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : m.content}`).join('\n');
       const { object: { query } } = await generateObject({
@@ -339,31 +328,13 @@ export async function POST(req: NextRequest) {
 
       if (selectedModelConfig && selectedModelConfig.service === 'gpt5') {
         const { gpt5ReasoningEffort, gpt5Verbosity, gpt5GroundingEnabled } = body;
-        const lastMessage = processedMessages[processedMessages.length - 1];
-
-        let inputText = "";
-        let imageFromMsg: string | undefined;
-
-        if (Array.isArray(lastMessage.content)) {
-            const textPart = lastMessage.content.find(isTextPart);
-            if (textPart) {
-                inputText = textPart.text;
-            }
-            const imagePart = lastMessage.content.find(isImagePart);
-            if (imagePart) {
-                imageFromMsg = imagePart.image;
-            }
-        } else if (typeof lastMessage.content === "string") {
-            inputText = lastMessage.content;
-        }
 
         const { pricingPerMillionTokensUSD } = await getModelsConfig();
         const pricing = pricingPerMillionTokensUSD[modelId];
 
         const stream = await streamGpt5Response({
             model: modelId,
-            prompt: inputText,
-            imageUrlOrDataUrl: imageFromMsg,
+            messages: processedMessages as Array<{ role: string; content: string | Array<{ type: string; text?: string; image?: string }> }>,
             reasoning: gpt5ReasoningEffort || "low",
             verbosity: gpt5Verbosity || "low",
             groundingEnabled: gpt5GroundingEnabled || false,
@@ -491,6 +462,8 @@ export async function POST(req: NextRequest) {
       } else if (modelId.startsWith('gemini')) {
           console.log(`[DEBUG] Processing Gemini model: ${modelId}`);
           
+          const { geminiGroundingEnabled } = body;
+          
           // Special handling for Gemini 3 Pro Preview
           if (modelId === 'gemini-3-pro-preview') {
             console.log('[DEBUG] Using dedicated Gemini 3 service with thinkingConfig');
@@ -528,6 +501,7 @@ export async function POST(req: NextRequest) {
               temperature: finalTemperature,
               maxTokens: maxTokens,
               thinkingLevel: gemini3ThinkingLevel || 'high', // Default to 'high' if not specified
+              groundingEnabled: geminiGroundingEnabled || false,
             });
 
             // Handle usage tracking for Gemini 3
@@ -589,11 +563,39 @@ export async function POST(req: NextRequest) {
 
           try {
             console.log(`[DEBUG] Calling Vertex AI with model: ${modelId}`);
-            const result = await streamText({ 
-                ...streamTextConfig, 
-                model: getGoogleProvider()(modelId),
-                maxTokens: adjustedMaxTokens,
-                system: adjustedSystemPrompt,
+            console.log(`[DEBUG] geminiGroundingEnabled: ${geminiGroundingEnabled}`);
+            
+            // Create model with or without grounding
+            let geminiModel;
+            if (geminiGroundingEnabled && (modelId === 'gemini-2.5-pro' || modelId === 'gemini-2.5-flash')) {
+              console.log('[DEBUG] Enabling Google Search grounding for Gemini 2.5');
+              console.log('[DEBUG] Project ID:', process.env.LLM_GCP_GOOGLE_CLOUD_PROJECT_ID);
+              console.log('[DEBUG] Location:', process.env.LLM_GCP_GOOGLE_CLOUD_LOCATION);
+              
+              const { createVertex } = await import('@ai-sdk/google-vertex');
+              const vertex = createVertex({
+                project: process.env.LLM_GCP_GOOGLE_CLOUD_PROJECT_ID,
+                location: process.env.LLM_GCP_GOOGLE_CLOUD_LOCATION,
+              });
+              
+              // Try using useSearchGrounding parameter instead of structuredTools
+              console.log('[DEBUG] Attempting useSearchGrounding: true');
+              
+              geminiModel = vertex(modelId, {
+                useSearchGrounding: true,
+              } as { useSearchGrounding: boolean });
+              
+              console.log('[DEBUG] Gemini 2.5 model created with useSearchGrounding');
+            } else {
+              console.log('[DEBUG] Using standard Gemini model without grounding');
+              geminiModel = getGoogleProvider()(modelId);
+            }
+            
+            const result = await streamText({
+              ...streamTextConfig,
+              model: geminiModel,
+              maxTokens: adjustedMaxTokens,
+              system: adjustedSystemPrompt,
             });
             return result.toDataStreamResponse();
           } catch (geminiError) {

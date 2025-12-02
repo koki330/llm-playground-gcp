@@ -36,6 +36,8 @@ const Sidebar = () => {
     setGemini3ThinkingLevel,
     gpt5GroundingEnabled,
     setGpt5GroundingEnabled,
+    geminiGroundingEnabled,
+    setGeminiGroundingEnabled,
   } = useAppContext();
 
   const MIN_GEMINI_TOKENS = 2000;
@@ -91,6 +93,28 @@ const Sidebar = () => {
               <option value="high">高</option>
               <option value="low">低</option>
             </select>
+          </div>
+
+          <div className="pt-4 border-t border-[#E0E0E0]">
+            <h3 className="flex items-center gap-2 text-md font-semibold mb-3 text-gray-800">
+              <Globe size={18} />
+              Tools
+            </h3>
+            <div className="flex items-center justify-between">
+              <label htmlFor="gemini3Grounding" className="text-sm font-medium text-gray-800">Web検索を有効にする</label>
+              <input
+                type="checkbox"
+                id="gemini3Grounding"
+                checked={geminiGroundingEnabled}
+                onChange={(e) => setGeminiGroundingEnabled(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-[#A61C4B] focus:ring-[#A61C4B]"
+                disabled={isLoading}
+              />
+            </div>
+            <div className="mt-3 flex items-start gap-2 p-2 text-xs text-red-800 bg-red-100 border border-red-200 rounded-lg">
+              <AlertTriangle size={24} className="flex-shrink-0" />
+              <span>Web検索機能は公開情報を対象とします。機密情報や個人情報は入力しないでください。</span>
+            </div>
           </div>
         </div>
       );
@@ -209,6 +233,30 @@ const Sidebar = () => {
               disabled={isLoading}
             />
           </div>
+
+          {(selectedModel === 'gemini-2.5-pro' || selectedModel === 'gemini-2.5-flash') && (
+            <div className="pt-4 border-t border-[#E0E0E0]">
+              <h3 className="flex items-center gap-2 text-md font-semibold mb-3 text-gray-800">
+                <Globe size={18} />
+                Tools
+              </h3>
+              <div className="flex items-center justify-between">
+                <label htmlFor="geminiGrounding" className="text-sm font-medium text-gray-800">Web検索を有効にする</label>
+                <input
+                  type="checkbox"
+                  id="geminiGrounding"
+                  checked={geminiGroundingEnabled}
+                  onChange={(e) => setGeminiGroundingEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-[#A61C4B] focus:ring-[#A61C4B]"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="mt-3 flex items-start gap-2 p-2 text-xs text-red-800 bg-red-100 border border-red-200 rounded-lg">
+                <AlertTriangle size={24} className="flex-shrink-0" />
+                <span>Web検索機能は公開情報を対象とします。機密情報や個人情報は入力しないでください。</span>
+              </div>
+            </div>
+          )}
         </div>
       );
     }

@@ -69,6 +69,8 @@ interface AppContextType {
   setGemini3ThinkingLevel: React.Dispatch<React.SetStateAction<'low' | 'high'>>;
   gpt5GroundingEnabled: boolean;
   setGpt5GroundingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  geminiGroundingEnabled: boolean;
+  setGeminiGroundingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -92,6 +94,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [gpt5Verbosity, setGpt5Verbosity] = useState<'low' | 'medium' | 'high'>('medium');
   const [gemini3ThinkingLevel, setGemini3ThinkingLevel] = useState<'low' | 'high'>('high');
   const [gpt5GroundingEnabled, setGpt5GroundingEnabled] = useState(false);
+  const [geminiGroundingEnabled, setGeminiGroundingEnabled] = useState(false);
 
   const currentModelConfig = modelConfigData?.modelConfig[selectedModel];
   const modelGroups = modelConfigData?.modelGroups || [];
@@ -141,6 +144,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       gpt5ReasoningEffort: selectedModel.startsWith('gpt-5') ? gpt5ReasoningEffort : undefined,
       gpt5Verbosity: selectedModel.startsWith('gpt-5') ? gpt5Verbosity : undefined,
       gpt5GroundingEnabled: selectedModel.startsWith('gpt-5') ? gpt5GroundingEnabled : undefined,
+      geminiGroundingEnabled: selectedModel.startsWith('gemini') ? geminiGroundingEnabled : undefined,
       gemini3ThinkingLevel: selectedModel === 'gemini-3-pro-preview' ? gemini3ThinkingLevel : undefined,
       // imageUri is now passed directly in submitPrompt
     },
@@ -185,6 +189,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       fetchUsage(selectedModel);
       setIsWebSearchEnabled(false);
       setGpt5GroundingEnabled(false);
+      setGeminiGroundingEnabled(false);
       const newMax = modelConfigData.modelConfig[selectedModel]?.maxTokens;
       if (newMax) {
         setMaxTokens(newMax);
@@ -281,6 +286,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setGemini3ThinkingLevel,
         gpt5GroundingEnabled,
         setGpt5GroundingEnabled,
+        geminiGroundingEnabled,
+        setGeminiGroundingEnabled,
     }}>
       {children}
     </AppContext.Provider>
