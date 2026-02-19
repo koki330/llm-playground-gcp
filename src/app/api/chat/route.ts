@@ -21,7 +21,8 @@ interface ChatRequestBody {
   maxTokens?: number;
   reasoningPreset?: 'low' | 'middle' | 'high';
   webSearchEnabled?: boolean;
-  imageUri?: string; // Added for image URI
+  imageUri?: string; // Backward compatibility for single image
+  imageUris?: string[]; // Multiple images support
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   gpt5Verbosity?: 'low' | 'medium' | 'high';
   gpt5GroundingEnabled?: boolean;
@@ -160,62 +161,55 @@ export async function POST(req: NextRequest) {
 
     const processedMessages: AppMessage[] = messages.map(msg => ({ ...msg })); // Deep copy to avoid mutation issues
 
-    // If an image URI is provided, download the image and construct a multi-modal message
-    if (imageUri) {
-        console.log(`[DEBUG] Image URI found: ${imageUri}`);
+    // Handle multiple images (imageUris) or single image (imageUri) for backward compatibility
+    const { imageUris: requestImageUris } = body;
+    const imagesToProcess = requestImageUris && requestImageUris.length > 0 
+      ? requestImageUris 
+      : (imageUri ? [imageUri] : []);
+
+    if (imagesToProcess.length > 0) {
+        console.log(`[DEBUG] Processing ${imagesToProcess.length} image(s)`);
         try {
             const storage = new Storage();
             console.log('[DEBUG] GCS Storage client initialized.');
-
-            const [bucket, ...fileParts] = imageUri.replace('gs://', '').split('/');
-            const fileName = fileParts.join('/');
-            
-            console.log(`[DEBUG] Attempting to download from bucket: "${bucket}" and file: "${fileName}"`);
-
-            const [fileBuffer] = await storage.bucket(bucket).file(fileName).download();
-            console.log(`[DEBUG] Image downloaded from GCS. Buffer size: ${fileBuffer.length}`);
 
             const lastUserMessage = processedMessages.findLast(m => m.role === 'user');
 
             if (lastUserMessage) {
                 const textContent = typeof lastUserMessage.content === 'string' ? lastUserMessage.content : '';
-                
-                const [metadata] = await storage.bucket(bucket).file(fileName).getMetadata();
-                const mime = metadata?.contentType || "image/png";
-                const imageBase64 = fileBuffer.toString("base64");
-                const dataUrl = `data:${mime};base64,${imageBase64}`;
+                const newContent: Array<{ type: "image"; image: string } | { type: "text"; text: string }> = [];
 
-                // 修正: imageUrl を使う（AI SDKの期待形式）
-                lastUserMessage.content = [
-                    { type: 'image', image: dataUrl },
-                    { type: 'text', text: textContent }
-                ];
+                // Process all images
+                for (const uri of imagesToProcess) {
+                    const [bucket, ...fileParts] = uri.replace('gs://', '').split('/');
+                    const fileName = fileParts.join('/');
+                    
+                    console.log(`[DEBUG] Downloading from bucket: "${bucket}", file: "${fileName}"`);
 
-                const newContent: Array<{ type: "image"; image: string } | { type: "text"; text: string }> = [
-                    { type: "image", image: dataUrl },
-                    { type: "text", text: textContent },
-                ];
+                    const [fileBuffer] = await storage.bucket(bucket).file(fileName).download();
+                    console.log(`[DEBUG] Image downloaded. Buffer size: ${fileBuffer.length}`);
+
+                    const [metadata] = await storage.bucket(bucket).file(fileName).getMetadata();
+                    const mime = metadata?.contentType || "image/png";
+                    const imageBase64 = fileBuffer.toString("base64");
+                    const dataUrl = `data:${mime};base64,${imageBase64}`;
+
+                    newContent.push({ type: "image", image: dataUrl });
+                }
+
+                // Add text content at the end
+                newContent.push({ type: "text", text: textContent });
 
                 (lastUserMessage as { content: unknown }).content = newContent;
 
                 if ("parts" in (lastUserMessage as Record<string, unknown>)) {
-                    // parts は自前の拡張なので削除
                     delete (lastUserMessage as Record<string, unknown>).parts;
                 }
 
-                // ログはbase64を出さない
-                console.log("[DEBUG] Constructed multi-modal message:", JSON.stringify({
-                    ...lastUserMessage,
-                    content: [
-                        { type: "image", imageUrl: `data:${mime};base64,[OMITTED length=${imageBase64.length}]` },
-                        { type: "text", text: textContent }
-                    ]
-                }, null, 2));
+                console.log(`[DEBUG] Constructed multi-modal message with ${imagesToProcess.length} image(s)`);
             }
         } catch (e) {
             console.error('[ERROR] Failed during GCS image processing:', e);
-            // Optionally, return a specific error response
-            // return NextResponse.json({ error: 'Failed to process image from storage.' }, { status: 500 });
         }
     }
 
@@ -384,13 +378,29 @@ export async function POST(req: NextRequest) {
                             const dataUrl = part.image;
                             const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
                             if (matches) {
-                              let mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/png';
                               const extractedType = matches[1];
-                              if (extractedType === 'image/jpeg' || extractedType === 'image/png' || 
+                              const base64Data = matches[2];
+                              
+                              // Detect actual image format from base64 data signature
+                              let mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/png';
+                              
+                              // Check magic numbers (first few bytes of base64)
+                              if (base64Data.startsWith('/9j/')) {
+                                mediaType = 'image/jpeg';
+                              } else if (base64Data.startsWith('iVBORw0KGgo')) {
+                                mediaType = 'image/png';
+                              } else if (base64Data.startsWith('R0lGOD')) {
+                                mediaType = 'image/gif';
+                              } else if (base64Data.startsWith('UklGR')) {
+                                mediaType = 'image/webp';
+                              } else if (extractedType === 'image/jpeg' || extractedType === 'image/png' || 
                                   extractedType === 'image/gif' || extractedType === 'image/webp') {
+                                // Fallback to extracted type if magic number detection fails
                                 mediaType = extractedType;
                               }
-                              const base64Data = matches[2];
+                              
+                              console.log(`[DEBUG] Claude image - Extracted type: ${extractedType}, Detected type: ${mediaType}`);
+                              
                               anthropicContent.push({
                                 type: 'image',
                                 source: {
@@ -469,6 +479,7 @@ export async function POST(req: NextRequest) {
             console.log('[DEBUG] Using dedicated Gemini 3 service with thinkingConfig');
             
             const { gemini3ThinkingLevel } = body;
+            const pricing = pricingPerMillionTokensUSD[modelId];
             
             const stream = await streamGemini3Response({
               model: modelId,
@@ -502,11 +513,11 @@ export async function POST(req: NextRequest) {
               maxTokens: maxTokens,
               thinkingLevel: gemini3ThinkingLevel || 'high', // Default to 'high' if not specified
               groundingEnabled: geminiGroundingEnabled || false,
+              onUsageUpdate: pricing ? async (inputTokens: number, outputTokens: number) => {
+                console.log(`[DEBUG] Gemini 3 usage - Input: ${inputTokens}, Output: ${outputTokens}`);
+                await usageTracker.updateUsage(modelId, inputTokens, outputTokens, pricing);
+              } : undefined,
             });
-
-            // Handle usage tracking for Gemini 3
-            // Note: We'll need to get usage from the response metadata
-            // For now, we'll skip usage tracking until we implement it properly
             
             return new Response(stream, {
               headers: { 'Content-Type': 'text/plain; charset=utf-8' },

@@ -33,25 +33,43 @@ export async function processDocument(fileBuffer: Buffer, mimeType: string): Pro
         },
     };
 
-    try {
-        console.log(`[DEBUG] Sending request to Document AI processor: ${processorName}`);
-        const [result] = await documentAiClient.processDocument(request);
-        
-        // --- Start of Debugging Block ---
-        console.log('[DEBUG] Full response from Document AI:', JSON.stringify(result, null, 2));
-        // --- End of Debugging Block ---
-        
-        if (result.document?.text) {
-            console.log('[DEBUG] Successfully extracted text from Document AI.');
-            return result.document.text;
-        } else {
-            console.warn('[WARN] Document AI processed the file, but no text was found.');
-            return ''; // Return an empty string instead of an error message
+    // Retry logic for handling transient errors
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`[DEBUG] Sending request to Document AI processor (attempt ${attempt}/${maxRetries}): ${processorName}`);
+            const [result] = await documentAiClient.processDocument(request);
+            
+            if (result.document?.text) {
+                console.log('[DEBUG] Successfully extracted text from Document AI.');
+                return result.document.text;
+            } else {
+                console.warn('[WARN] Document AI processed the file, but no text was found.');
+                return ''; // Return an empty string instead of an error message
+            }
+        } catch (error) {
+            console.error(`[ERROR] Document AI API call failed (attempt ${attempt}/${maxRetries}):`, error);
+            
+            // Check if it's a retryable error (503, 429, network errors)
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const isRetryable = errorMessage.includes('503') || 
+                               errorMessage.includes('Service Unavailable') ||
+                               errorMessage.includes('429') ||
+                               errorMessage.includes('UNAVAILABLE') ||
+                               errorMessage.includes('DEADLINE_EXCEEDED');
+            
+            if (attempt < maxRetries && isRetryable) {
+                console.log(`[INFO] Retrying in ${retryDelay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+                continue;
+            }
+            
+            // If not retryable or max retries reached, throw error
+            throw new Error(`Document AI processing failed after ${attempt} attempt(s): ${errorMessage}`);
         }
-    } catch (error) {
-        // --- Start of Debugging Block ---
-        console.error('[FATAL ERROR] Document AI API call failed. Full error object:', JSON.stringify(error, null, 2));
-        // --- End of Debugging Block ---
-        throw new Error(`Document AI processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+    
+    throw new Error('Document AI processing failed: Maximum retries exceeded');
 }

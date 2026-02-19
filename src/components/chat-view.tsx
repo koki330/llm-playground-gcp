@@ -35,12 +35,12 @@ const ChatView = () => {
           <p className="text-center text-gray-500">Select a model and start chatting.</p>
         ) : (
           messages.map((msg) => {
-            const hasPreviewUrl = (data: unknown): data is { previewUrl: string } => {
+            const hasPreviewUrls = (data: unknown): data is { previewUrls: string[] } => {
               return (
                 typeof data === 'object' &&
                 data != null &&
-                'previewUrl' in data &&
-                typeof (data as { previewUrl: unknown }).previewUrl === 'string'
+                'previewUrls' in data &&
+                Array.isArray((data as { previewUrls: unknown }).previewUrls)
               );
             };
 
@@ -125,15 +125,20 @@ const ChatView = () => {
                     </button>
                   )}
                   <div className="space-y-2">
-                    {hasPreviewUrl(msg.data) && (
-                      <Image
-                        src={msg.data.previewUrl}
-                        alt="User uploaded content"
-                        width={500}
-                        height={500}
-                        className="h-auto rounded-lg max-w-xs lg:max-w-sm xl:max-w-md"
-                        unoptimized
-                      />
+                    {hasPreviewUrls(msg.data) && msg.data.previewUrls.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {msg.data.previewUrls.map((url, idx) => (
+                          <Image
+                            key={idx}
+                            src={url}
+                            alt={`User uploaded content ${idx + 1}`}
+                            width={500}
+                            height={500}
+                            className="h-auto rounded-lg max-w-xs lg:max-w-sm xl:max-w-md"
+                            unoptimized
+                          />
+                        ))}
+                      </div>
                     )}
                     {messageContent}
                   </div>

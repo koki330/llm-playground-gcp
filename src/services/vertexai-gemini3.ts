@@ -13,6 +13,7 @@ interface Gemini3StreamParams {
   groundingEnabled?: boolean;
   projectId?: string;
   location?: string;
+  onUsageUpdate?: (inputTokens: number, outputTokens: number) => Promise<void>;
 }
 
 export async function streamGemini3Response(params: Gemini3StreamParams): Promise<ReadableStream<Uint8Array>> {
@@ -158,6 +159,8 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
         let jsonBuffer = '';
         let bracketCount = 0;
         let inJson = false;
+        let totalInputTokens = 0;
+        let totalOutputTokens = 0;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -193,6 +196,13 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
                   
                   // Process each item
                   for (const item of dataArray) {
+                    // Extract usage metadata
+                    if (item.usageMetadata) {
+                      totalInputTokens = item.usageMetadata.promptTokenCount || 0;
+                      totalOutputTokens = item.usageMetadata.candidatesTokenCount || 0;
+                      console.log(`[DEBUG] Gemini 3 usage metadata - Input: ${totalInputTokens}, Output: ${totalOutputTokens}`);
+                    }
+                    
                     if (item.candidates && item.candidates[0]?.content?.parts) {
                       for (const part of item.candidates[0].content.parts) {
                         // Skip thought parts, only send regular text
@@ -216,6 +226,15 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
           
           // Clear processed buffer
           buffer = '';
+        }
+
+        // Call usage update callback if provided
+        if (params.onUsageUpdate && (totalInputTokens > 0 || totalOutputTokens > 0)) {
+          try {
+            await params.onUsageUpdate(totalInputTokens, totalOutputTokens);
+          } catch (error) {
+            console.error('[ERROR] Failed to update usage:', error);
+          }
         }
 
         controller.close();
