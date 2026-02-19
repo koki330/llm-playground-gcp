@@ -11,6 +11,11 @@ export interface Attachment {
   previewUrl: string;
 }
 
+export interface FileContentItem {
+  name: string;
+  content: string;
+}
+
 export type ReasoningPreset = 'low' | 'middle' | 'high';
 export type TemperaturePreset = 'precise' | 'balanced' | 'creative';
 
@@ -43,7 +48,12 @@ interface AppContextType {
   setFileContent: React.Dispatch<React.SetStateAction<string>>;
   imageUri: string; // To hold the GCS URI for images
   setImageUri: React.Dispatch<React.SetStateAction<string>>;
-  submitPrompt: (prompt: string, previewUrl?: string) => void;
+  // Multiple files support
+  fileContents: FileContentItem[];
+  setFileContents: React.Dispatch<React.SetStateAction<FileContentItem[]>>;
+  imageUris: string[];
+  setImageUris: React.Dispatch<React.SetStateAction<string[]>>;
+  submitPrompt: (prompt: string, previewUrls?: string[]) => void;
   clearConversation: () => void;
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -82,6 +92,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [fileContent, setFileContent] = useState('');
   const [imageUri, setImageUri] = useState('');
+  // Multiple files support
+  const [fileContents, setFileContents] = useState<FileContentItem[]>([]);
+  const [imageUris, setImageUris] = useState<string[]>([]);
   const [isFileProcessing, setIsFileProcessing] = useState(false);
   const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,13 +123,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         const data: ModelConfigData = await response.json();
         setModelConfigData(data);
 
-        // Set 'gpt-4.1' as the default model if it exists, otherwise fall back to the first available model.
-        const gpt41Exists = data.modelGroups.some(group => 
-          Object.values(group.models).includes('gpt-4.1')
+        // Set 'gpt-5-mini' as the default model if it exists, otherwise fall back to the first available model.
+        const gpt5MiniExists = data.modelGroups.some(group =>
+          Object.values(group.models).includes('gpt-5-mini')
         );
 
-        if (gpt41Exists) {
-          setSelectedModel('gpt-4.1');
+        if (gpt5MiniExists) {
+          setSelectedModel('gpt-5-mini');
         } else if (data.modelGroups.length > 0 && data.modelGroups[0].models) {
           const firstModelId = Object.values(data.modelGroups[0].models)[0];
           if (firstModelId) {
@@ -152,8 +165,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setError(err.message);
     },
     onFinish: () => {
-      // Reset imageUri after the response is fully received.
+      // Reset imageUri and imageUris after the response is fully received.
       setImageUri('');
+      setImageUris([]);
       if (selectedModel) fetchUsage(selectedModel);
     }
   });
@@ -202,30 +216,43 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const clearConversation = () => {
-    // Type guard to check for previewUrl in a type-safe way
-    const hasPreviewUrl = (data: unknown): data is { previewUrl: string } => {
-      return typeof data === 'object' && data != null && 'previewUrl' in data;
+    // Type guard to check for previewUrls in a type-safe way
+    const hasPreviewUrls = (data: unknown): data is { previewUrls: string[] } => {
+      return typeof data === 'object' && data != null && 'previewUrls' in data;
     };
 
     // Revoke any object URLs to prevent memory leaks
     messages.forEach(msg => {
-      if (hasPreviewUrl(msg.data)) {
-        URL.revokeObjectURL(msg.data.previewUrl);
+      if (hasPreviewUrls(msg.data)) {
+        msg.data.previewUrls.forEach(url => URL.revokeObjectURL(url));
       }
     });
     setMessages([]);
     setFileContent('');
     setImageUri('');
+    setFileContents([]);
+    setImageUris([]);
   };
 
-  const submitPrompt = async (prompt: string, previewUrl?: string) => {
+  const submitPrompt = async (prompt: string, previewUrls?: string[]) => {
     if (usageInfo?.isLimited || !selectedModel) return;
     setError(null);
 
     let contentForRequest = prompt;
-    if (fileContent) {
+    
+    // Handle multiple file contents
+    if (fileContents.length > 0) {
+      const filesText = fileContents.map(fc => 
+        `[File: ${fc.name}]\n${fc.content}`
+      ).join('\n\n---\n\n');
+      contentForRequest = `The user has uploaded ${fileContents.length} file(s). Their contents are:\n\n${filesText}\n\n---\n\nUser prompt:\n\n${prompt}`;
+    } else if (fileContent) {
+      // Backward compatibility with single file
       contentForRequest = `The user has uploaded a file. Its content is:\n\n${fileContent}\n\n---\n\nUser prompt:\n\n${prompt}`;
     }
+
+    // Determine which image URIs to use (multiple or single)
+    const imagesToSend = imageUris.length > 0 ? imageUris : (imageUri ? [imageUri] : []);
 
     // Let the `useChat` hook handle the message creation and state update.
     // We pass all necessary info, including UI data, directly to `append`.
@@ -233,23 +260,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       {
         role: 'user',
         content: contentForRequest,
-        data: previewUrl ? { previewUrl } : undefined,
+        data: previewUrls && previewUrls.length > 0 ? { previewUrls } : undefined,
       },
-      { body: { imageUri } }
+      { body: { imageUris: imagesToSend } }
     );
 
     // Reset input states after the submission is complete.
     // The core message state is managed by the hook.
     setInput('');
     setFileContent('');
-    // imageUri is reset in onFinish to ensure it's available for the request
+    setFileContents([]);
+    // imageUri and imageUris are reset in onFinish to ensure they're available for the request
   };
 
   return (
     <AppContext.Provider value={{ 
         messages,
         selectedModel, 
-        setSelectedModel, 
+      setSelectedModel, 
         isLoading: isLoading || isFileProcessing,
         isConfigLoading,
         isFileProcessing, 
@@ -260,6 +288,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setFileContent,
         imageUri,
         setImageUri,
+        fileContents,
+        setFileContents,
+        imageUris,
+        setImageUris,
         submitPrompt, 
         clearConversation,
         input,

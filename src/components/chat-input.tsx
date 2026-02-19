@@ -13,8 +13,10 @@ const ChatInput = () => {
     setIsFileProcessing,
     input,
     handleInputChange,
-    setFileContent,
-    setImageUri, // Get the new setter from context
+    setFileContents,
+    setImageUris,
+    fileContents,
+    imageUris,
     stopGeneration,
   } = useAppContext();
 
@@ -31,75 +33,102 @@ const ChatInput = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
-    const file = e.target.files[0];
-    setAttachments([]);
-    setFileContent('');
-    setImageUri(''); // Reset image URI
+    const files = Array.from(e.target.files);
+    
+    // Keep existing attachments and add new ones
     setIsFileProcessing(true);
 
+    const newAttachments: Attachment[] = [...attachments]; // Keep existing UI attachments
+    const newImageUris: string[] = [...imageUris]; // Keep existing image URIs from AppContext
+    const newFileContents: Array<{ name: string; content: string }> = [...fileContents]; // Keep existing file contents from AppContext
+
     try {
-      const signedUrlResponse = await fetch('/api/generate-upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: file.name, contentType: file.type }),
-      });
-      if (!signedUrlResponse.ok) throw new Error('Failed to get signed URL.');
-        const { uploadUrl, gcsUri } = await signedUrlResponse.json();
-        console.log('[DEBUG] GCS URI obtained:', gcsUri); // <-- Add this line
-
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
-      });
-      if (!uploadResponse.ok) throw new Error('Failed to upload file to GCS.');
-
-      const newAttachment: Attachment = {
-        name: file.name,
-        type: file.type,
-        gcsUri: gcsUri,
-        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
-      };
-      setAttachments([newAttachment]);
-
-      if (file.type.startsWith('image/')) {
-        // --- For images, just set the GCS URI and we are done ---
-        setImageUri(gcsUri);
-        setIsFileProcessing(false);
-      } else {
-        // --- For other files, continue to extract text ---
-        const extractResponse = await fetch('/api/extract-text', {
+      for (const file of files) {
+        const signedUrlResponse = await fetch('/api/generate-upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ gcsUri, contentType: file.type }),
+          body: JSON.stringify({ fileName: file.name, contentType: file.type }),
         });
-        if (!extractResponse.ok) {
-          const errorData = await extractResponse.json();
-          throw new Error(errorData.error || 'Failed to extract text.');
+        if (!signedUrlResponse.ok) throw new Error('Failed to get signed URL.');
+        const { uploadUrl, gcsUri } = await signedUrlResponse.json();
+        console.log('[DEBUG] GCS URI obtained:', gcsUri);
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+        if (!uploadResponse.ok) throw new Error('Failed to upload file to GCS.');
+
+        const newAttachment: Attachment = {
+          name: file.name,
+          type: file.type,
+          gcsUri: gcsUri,
+          previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+        };
+        newAttachments.push(newAttachment);
+
+        if (file.type.startsWith('image/')) {
+          newImageUris.push(gcsUri);
+        } else {
+          const extractResponse = await fetch('/api/extract-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gcsUri, contentType: file.type }),
+          });
+          if (!extractResponse.ok) {
+            const errorData = await extractResponse.json();
+            throw new Error(errorData.error || 'Failed to extract text.');
+          }
+          const { text } = await extractResponse.json();
+          newFileContents.push({ name: file.name, content: text });
         }
-        const { text } = await extractResponse.json();
-        setFileContent(text);
-        setIsFileProcessing(false);
       }
+
+      console.log('[DEBUG] Setting attachments. Total:', newAttachments.length);
+      console.log('[DEBUG] Setting imageUris. Total:', newImageUris.length);
+      console.log('[DEBUG] Setting fileContents. Total:', newFileContents.length);
+      
+      setAttachments(newAttachments);
+      setImageUris(newImageUris);
+      setFileContents(newFileContents);
+      setIsFileProcessing(false);
     } catch (error) {
       console.error('File processing error:', error);
-      setFileContent(`Error processing file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'ファイルの処理中にエラーが発生しました。';
+      alert(errorMessage);
       setIsFileProcessing(false);
     } finally {
-      // Reset the file input so the same file can be selected again
       if (e.target) {
         e.target.value = '';
       }
     }
   };
 
-  const handleRemoveAttachment = () => {
-    const attachmentToRemove = attachments[0];
+  const handleRemoveAttachment = (index: number) => {
+    const attachmentToRemove = attachments[index];
+    
+    // Revoke object URL for images
     if (attachmentToRemove?.previewUrl) {
       URL.revokeObjectURL(attachmentToRemove.previewUrl);
     }
-    setAttachments([]);
-    setFileContent('');
+    
+    // Update local attachments
+    const updatedAttachments = attachments.filter((_, i) => i !== index);
+    setAttachments(updatedAttachments);
+    
+    // Update AppContext state
+    if (attachmentToRemove.type.startsWith('image/')) {
+      // Remove from imageUris
+      const updatedImageUris = imageUris.filter(uri => uri !== attachmentToRemove.gcsUri);
+      setImageUris(updatedImageUris);
+    } else {
+      // Remove from fileContents
+      const updatedFileContents = fileContents.filter(fc => fc.name !== attachmentToRemove.name);
+      setFileContents(updatedFileContents);
+    }
+    
+    console.log('[DEBUG] Removed attachment:', attachmentToRemove.name);
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -107,8 +136,8 @@ const ChatInput = () => {
     const totalLoading = isLoading || isFileProcessing;
     if ((!input.trim() && attachments.length === 0) || totalLoading) return;
 
-    const previewUrl = attachments[0]?.previewUrl || '';
-    submitPrompt(input, previewUrl);
+    const previewUrls = attachments.map(att => att.previewUrl).filter(url => url !== '');
+    submitPrompt(input, previewUrls);
 
     // Clear the local attachment state in the input component.
     setAttachments([]);
@@ -131,11 +160,15 @@ const ChatInput = () => {
   return (
     <form onSubmit={handleSubmit} className="p-4 bg-gray-50 border-t border-gray-200">
       {attachments.length > 0 && (
-        <div className="p-2 mb-2 bg-gray-100 rounded-lg text-sm text-gray-800">
-          {attachments.map(file => (
-            <div key={file.name} className="flex items-center justify-between">
-              <span>{file.name}</span>
-              <button type="button" onClick={handleRemoveAttachment} className="text-gray-400 hover:text-white">
+        <div className="p-2 mb-2 bg-gray-100 rounded-lg text-sm text-gray-800 space-y-1">
+          {attachments.map((file, index) => (
+            <div key={`${file.name}-${index}`} className="flex items-center justify-between py-1">
+              <span className="truncate flex-1">{file.name}</span>
+              <button 
+                type="button" 
+                onClick={() => handleRemoveAttachment(index)} 
+                className="ml-2 text-gray-400 hover:text-gray-600"
+              >
                 <X size={16} />
               </button>
             </div>
@@ -156,6 +189,7 @@ const ChatInput = () => {
           ref={fileInputRef}
           onChange={handleFileChange}
           className="hidden"
+          multiple
           accept="image/png,image/jpeg,image/gif,image/webp,text/plain,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         />
         <Textarea
