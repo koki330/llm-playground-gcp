@@ -44,6 +44,24 @@ const ChatView = () => {
               );
             };
 
+            const hasPdfFileNames = (data: unknown): data is { pdfFileNames: string[] } => {
+              return (
+                typeof data === 'object' &&
+                data != null &&
+                'pdfFileNames' in data &&
+                Array.isArray((data as { pdfFileNames: unknown }).pdfFileNames)
+              );
+            };
+
+            const hasDocFileNames = (data: unknown): data is { docFileNames: string[] } => {
+              return (
+                typeof data === 'object' &&
+                data != null &&
+                'docFileNames' in data &&
+                Array.isArray((data as { docFileNames: unknown }).docFileNames)
+              );
+            };
+
             const messageContent = (
               <>
                 {Array.isArray(msg.parts) && msg.parts.length > 0 ? (
@@ -137,6 +155,26 @@ const ChatView = () => {
                             className="h-auto rounded-lg max-w-xs lg:max-w-sm xl:max-w-md"
                             unoptimized
                           />
+                        ))}
+                      </div>
+                    )}
+                    {hasPdfFileNames(msg.data) && msg.data.pdfFileNames.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {msg.data.pdfFileNames.map((name, idx) => (
+                          <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700">
+                            <FileText size={16} className="text-red-500 shrink-0" />
+                            <span className="truncate max-w-xs">{name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {hasDocFileNames(msg.data) && msg.data.docFileNames.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {msg.data.docFileNames.map((name, idx) => (
+                          <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700">
+                            <FileText size={16} className="text-blue-500 shrink-0" />
+                            <span className="truncate max-w-xs">{name}</span>
+                          </div>
                         ))}
                       </div>
                     )}

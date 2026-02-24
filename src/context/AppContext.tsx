@@ -16,13 +16,12 @@ export interface FileContentItem {
   content: string;
 }
 
-export type ReasoningPreset = 'low' | 'middle' | 'high';
 export type TemperaturePreset = 'precise' | 'balanced' | 'creative';
 
 // Type for the configuration data fetched from the API
 interface ModelConfigData {
   modelGroups: { label: string; models: Record<string, string> }[];
-  modelConfig: Record<string, { type: 'reasoning' | 'normal' | 'gpt5' | 'gemini3'; maxTokens: number }>;
+  modelConfig: Record<string, { type: 'normal' | 'gpt5' | 'gemini3'; maxTokens: number; supportsPdf?: boolean }>;
 }
 
 interface UsageInfo {
@@ -44,16 +43,13 @@ interface AppContextType {
   setIsFileProcessing: React.Dispatch<React.SetStateAction<boolean>>;
   systemPrompt: string;
   setSystemPrompt: React.Dispatch<React.SetStateAction<string>>;
-  fileContent: string;
-  setFileContent: React.Dispatch<React.SetStateAction<string>>;
-  imageUri: string; // To hold the GCS URI for images
-  setImageUri: React.Dispatch<React.SetStateAction<string>>;
-  // Multiple files support
   fileContents: FileContentItem[];
   setFileContents: React.Dispatch<React.SetStateAction<FileContentItem[]>>;
   imageUris: string[];
   setImageUris: React.Dispatch<React.SetStateAction<string[]>>;
-  submitPrompt: (prompt: string, previewUrls?: string[]) => void;
+  pdfUris: string[];
+  setPdfUris: React.Dispatch<React.SetStateAction<string[]>>;
+  submitPrompt: (prompt: string, previewUrls?: string[], pdfFileNames?: string[], docFileNames?: string[]) => void;
   clearConversation: () => void;
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -65,11 +61,7 @@ interface AppContextType {
   setTemperaturePreset: React.Dispatch<React.SetStateAction<TemperaturePreset>>;
   maxTokens: number;
   setMaxTokens: React.Dispatch<React.SetStateAction<number>>;
-  reasoningPreset: ReasoningPreset;
-  setReasoningPreset: React.Dispatch<React.SetStateAction<ReasoningPreset>>;
-  currentModelConfig: { type: 'reasoning' | 'normal' | 'gpt5' | 'gemini3', maxTokens: number } | undefined;
-  isWebSearchEnabled: boolean;
-  setIsWebSearchEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  currentModelConfig: { type: 'normal' | 'gpt5' | 'gemini3', maxTokens: number, supportsPdf?: boolean } | undefined;
   modelGroups: { label: string; models: Record<string, string> }[];
   gpt5ReasoningEffort: 'none' | 'minimal' | 'low' | 'medium' | 'high';
   setGpt5ReasoningEffort: React.Dispatch<React.SetStateAction<'none' | 'minimal' | 'low' | 'medium' | 'high'>>;
@@ -90,19 +82,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isConfigLoading, setIsConfigLoading] = useState(true);
   const [selectedModel, setSelectedModel] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [fileContent, setFileContent] = useState('');
-  const [imageUri, setImageUri] = useState('');
-  // Multiple files support
   const [fileContents, setFileContents] = useState<FileContentItem[]>([]);
   const [imageUris, setImageUris] = useState<string[]>([]);
+  const [pdfUris, setPdfUris] = useState<string[]>([]);
   const [isFileProcessing, setIsFileProcessing] = useState(false);
   const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [temperaturePreset, setTemperaturePreset] = useState<TemperaturePreset>('balanced');
   const [maxTokens, setMaxTokens] = useState(4096);
-  const [reasoningPreset, setReasoningPreset] = useState<ReasoningPreset>('middle');
-  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
   const [gpt5ReasoningEffort, setGpt5ReasoningEffort] = useState<'none' | 'minimal' | 'low' | 'medium' | 'high'>('medium');
   const [gpt5Verbosity, setGpt5Verbosity] = useState<'low' | 'medium' | 'high'>('medium');
   const [gemini3ThinkingLevel, setGemini3ThinkingLevel] = useState<'low' | 'high'>('high');
@@ -152,8 +140,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       systemPrompt: systemPrompt,
       temperaturePreset: currentModelConfig?.type === 'normal' ? temperaturePreset : undefined,
       maxTokens: currentModelConfig?.type === 'normal' ? maxTokens : undefined,
-      reasoningPreset: currentModelConfig?.type === 'reasoning' ? reasoningPreset : undefined,
-      webSearchEnabled: isWebSearchEnabled,
       gpt5ReasoningEffort: selectedModel.startsWith('gpt-5') ? gpt5ReasoningEffort : undefined,
       gpt5Verbosity: selectedModel.startsWith('gpt-5') ? gpt5Verbosity : undefined,
       gpt5GroundingEnabled: selectedModel.startsWith('gpt-5') ? gpt5GroundingEnabled : undefined,
@@ -165,9 +151,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setError(err.message);
     },
     onFinish: () => {
-      // Reset imageUri and imageUris after the response is fully received.
-      setImageUri('');
       setImageUris([]);
+      setPdfUris([]);
       if (selectedModel) fetchUsage(selectedModel);
     }
   });
@@ -201,7 +186,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (selectedModel && modelConfigData) {
       fetchUsage(selectedModel);
-      setIsWebSearchEnabled(false);
       setGpt5GroundingEnabled(false);
       setGeminiGroundingEnabled(false);
       const newMax = modelConfigData.modelConfig[selectedModel]?.maxTokens;
@@ -228,47 +212,40 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
     });
     setMessages([]);
-    setFileContent('');
-    setImageUri('');
     setFileContents([]);
     setImageUris([]);
+    setPdfUris([]);
   };
 
-  const submitPrompt = async (prompt: string, previewUrls?: string[]) => {
+  const submitPrompt = async (prompt: string, previewUrls?: string[], pdfFileNames?: string[], docFileNames?: string[]) => {
     if (usageInfo?.isLimited || !selectedModel) return;
     setError(null);
 
-    let contentForRequest = prompt;
-    
-    // Handle multiple file contents
-    if (fileContents.length > 0) {
-      const filesText = fileContents.map(fc => 
-        `[File: ${fc.name}]\n${fc.content}`
-      ).join('\n\n---\n\n');
-      contentForRequest = `The user has uploaded ${fileContents.length} file(s). Their contents are:\n\n${filesText}\n\n---\n\nUser prompt:\n\n${prompt}`;
-    } else if (fileContent) {
-      // Backward compatibility with single file
-      contentForRequest = `The user has uploaded a file. Its content is:\n\n${fileContent}\n\n---\n\nUser prompt:\n\n${prompt}`;
+    // Validate PDF support for the selected model
+    if (pdfUris.length > 0 && !currentModelConfig?.supportsPdf) {
+      setError('選択中のモデルはPDFのネイティブ処理に対応していません。別のモデルを選択してください。');
+      return;
     }
-
-    // Determine which image URIs to use (multiple or single)
-    const imagesToSend = imageUris.length > 0 ? imageUris : (imageUri ? [imageUri] : []);
 
     // Let the `useChat` hook handle the message creation and state update.
     // We pass all necessary info, including UI data, directly to `append`.
+    const data: { previewUrls?: string[]; pdfFileNames?: string[]; docFileNames?: string[] } = {};
+    if (previewUrls && previewUrls.length > 0) data.previewUrls = previewUrls;
+    if (pdfFileNames && pdfFileNames.length > 0) data.pdfFileNames = pdfFileNames;
+    if (docFileNames && docFileNames.length > 0) data.docFileNames = docFileNames;
+
     await append(
       {
         role: 'user',
-        content: contentForRequest,
-        data: previewUrls && previewUrls.length > 0 ? { previewUrls } : undefined,
+        content: prompt,
+        data: Object.keys(data).length > 0 ? data : undefined,
       },
-      { body: { imageUris: imagesToSend } }
+      { body: { imageUris, pdfUris, fileContents: fileContents.length > 0 ? fileContents : undefined } }
     );
 
     // Reset input states after the submission is complete.
     // The core message state is managed by the hook.
     setInput('');
-    setFileContent('');
     setFileContents([]);
     // imageUri and imageUris are reset in onFinish to ensure they're available for the request
   };
@@ -282,17 +259,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         isConfigLoading,
         isFileProcessing, 
         setIsFileProcessing,
-        systemPrompt, 
-        setSystemPrompt, 
-        fileContent,
-        setFileContent,
-        imageUri,
-        setImageUri,
+        systemPrompt,
+        setSystemPrompt,
         fileContents,
         setFileContents,
         imageUris,
         setImageUris,
-        submitPrompt, 
+        pdfUris,
+        setPdfUris,
+        submitPrompt,
         clearConversation,
         input,
         handleInputChange,
@@ -304,11 +279,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setTemperaturePreset,
         maxTokens,
         setMaxTokens,
-        reasoningPreset,
-        setReasoningPreset,
         currentModelConfig,
-        isWebSearchEnabled,
-        setIsWebSearchEnabled,
         modelGroups,
         gpt5ReasoningEffort,
         setGpt5ReasoningEffort,

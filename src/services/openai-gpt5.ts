@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 import type { Effort, Verbosity, Usage } from "@/types/ai";
 import { isResponsesStreamEvent, extractErrorMessage } from "@/types/ai";
+import { encodeTextChunk, encodeError, encodeFinish } from "@/utils/sse-encoder";
+import { formatApiError } from "@/utils/api-error";
 
 function getOpenAIClient() {
     return new OpenAI({
@@ -10,11 +12,12 @@ function getOpenAIClient() {
 
 type InputTextPart = { type: "input_text"; text: string };
 type InputImagePart = { type: "input_image"; image_url: string; detail: "low" | "high" | "auto" };
-type UserContentPart = InputTextPart | InputImagePart;
+type InputFilePart = { type: "input_file"; filename: string; file_data: string };
+type UserContentPart = InputTextPart | InputImagePart | InputFilePart;
 
 export interface Gpt5Params {
     model: string;
-    messages: Array<{ role: string; content: string | Array<{ type: string; text?: string; image?: string }> }>;
+    messages: Array<{ role: string; content: string | Array<{ type: string; text?: string; image?: string; pdf?: string }> }>;
     reasoning?: Effort;
     verbosity?: Verbosity;
     systemPrompt?: string;
@@ -73,10 +76,12 @@ export async function getGpt5Response(params: Gpt5Params): Promise<Gpt5Result> {
                 content.push({ type: "input_text", text: part.text });
             } else if (part.type === 'image' && part.image) {
                 content.push({ type: "input_image", image_url: part.image, detail: "auto" });
+            } else if (part.type === 'pdf' && part.pdf) {
+                content.push({ type: "input_file", filename: "document.pdf", file_data: part.pdf });
             }
         }
     }
-    
+
     const input = [{ role: 'user' as const, content }];
 
     try {
@@ -174,13 +179,13 @@ export async function streamGpt5Response(params: Gpt5Params & {
                 content.push({ type: "input_text", text: part.text });
             } else if (part.type === 'image' && part.image) {
                 content.push({ type: "input_image", image_url: part.image, detail: "auto" });
+            } else if (part.type === 'pdf' && part.pdf) {
+                content.push({ type: "input_file", filename: "document.pdf", file_data: part.pdf });
             }
         }
     }
-    
-    const input = [{ role: 'user' as const, content }];
 
-    const encoder = new TextEncoder();
+    const input = [{ role: 'user' as const, content }];
 
     async function run(modelToUse: string): Promise<ReadableStream<Uint8Array>> {
         const requestBody: {
@@ -215,17 +220,17 @@ export async function streamGpt5Response(params: Gpt5Params & {
                         if (!isResponsesStreamEvent(ev)) continue;
 
                         if (ev.type === "response.output_text.delta") {
-                            controller.enqueue(encoder.encode(`0:${JSON.stringify(ev.delta)}\n`));
+                            controller.enqueue(encodeTextChunk(ev.delta));
                         } else if (ev.type === "response.completed") {
                             const usage = ev.response?.usage;
                             if (usage && onUsage) await onUsage(usage);
                         } else if (ev.type === "response.error") {
-                            const message = ev.error?.message ?? "error";
-                            controller.enqueue(encoder.encode(`e:${JSON.stringify(message)}\n`));
+                            controller.enqueue(encodeError(formatApiError(ev.error)));
                         }
                     }
                 } finally {
                     await stream.done().catch(() => void 0);
+                    controller.enqueue(encodeFinish());
                     controller.close();
                 }
             },

@@ -9,13 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "latest",
-    "@ai-sdk/google": "^1.2.22",
-    "@ai-sdk/google-vertex": "latest",
-    "@ai-sdk/openai": "latest",
     "@ai-sdk/react": "^2.0.59",
     "@anthropic-ai/sdk": "^0.56.0",
-    "@google-cloud/documentai": "^9.2.0",
     "@google-cloud/storage": "^7.16.0",
     "@google-cloud/vertexai": "^1.10.0",
     "@types/dompurify": "^3.0.5",
@@ -38,7 +33,6 @@
     "shiki": "^3.8.0",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "tiktoken": "^1.0.21",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

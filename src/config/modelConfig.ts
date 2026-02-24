@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 // Define a comprehensive type for our model configuration
 interface ModelConfig {
   modelGroups: { label: string; models: Record<string, string> }[];
-  modelConfig: Record<string, { type: 'reasoning' | 'normal' | 'gpt5'; maxTokens: number; service?: string }>;
+  modelConfig: Record<string, { type: 'normal' | 'gpt5' | 'gemini3'; maxTokens: number; service?: string; supportsPdf?: boolean }>;
   monthlyLimitsUSD: Record<string, number>;
   pricingPerMillionTokensUSD: Record<string, { input: number; output: number }>;
 }

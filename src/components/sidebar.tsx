@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useAppContext, ReasoningPreset, TemperaturePreset } from "@/context/AppContext";
-import { FileText, SlidersHorizontal, BrainCircuit, Globe, AlertTriangle } from 'lucide-react';
+import { useAppContext, TemperaturePreset } from "@/context/AppContext";
+import { FileText, SlidersHorizontal, Globe } from 'lucide-react';
+import WebSearchWarning from './web-search-warning';
 
-const supportedFiles = [
-  'PDF', 'PNG', 'DOCX', 'XLSX', 'TXT', 'JSON'
-];
+const baseSupportedFiles = ['PNG', 'DOCX', 'XLSX', 'TXT', 'JSON'];
 
 const Sidebar = () => {
   const {
@@ -15,18 +14,13 @@ const Sidebar = () => {
     isLoading, 
     systemPrompt, 
     setSystemPrompt, 
-    fileContent,
     usageInfo,
     temperaturePreset,
     setTemperaturePreset,
     maxTokens,
     setMaxTokens,
-    reasoningPreset,
-    setReasoningPreset,
     currentModelConfig,
     isConfigLoading,
-    isWebSearchEnabled,
-    setIsWebSearchEnabled,
     modelGroups,
     gpt5ReasoningEffort,
     setGpt5ReasoningEffort,
@@ -39,6 +33,10 @@ const Sidebar = () => {
     geminiGroundingEnabled,
     setGeminiGroundingEnabled,
   } = useAppContext();
+
+  const supportedFiles = currentModelConfig?.supportsPdf
+    ? ['PDF', ...baseSupportedFiles]
+    : baseSupportedFiles;
 
   const MIN_GEMINI_TOKENS = 2000;
 
@@ -111,10 +109,7 @@ const Sidebar = () => {
                 disabled={isLoading}
               />
             </div>
-            <div className="mt-3 flex items-start gap-2 p-2 text-xs text-red-800 bg-red-100 border border-red-200 rounded-lg">
-              <AlertTriangle size={24} className="flex-shrink-0" />
-              <span>Web検索機能は公開情報を対象とします。機密情報や個人情報は入力しないでください。</span>
-            </div>
+            <WebSearchWarning />
           </div>
         </div>
       );
@@ -180,10 +175,7 @@ const Sidebar = () => {
                 disabled={isLoading}
               />
             </div>
-            <div className="mt-3 flex items-start gap-2 p-2 text-xs text-red-800 bg-red-100 border border-red-200 rounded-lg">
-              <AlertTriangle size={24} className="flex-shrink-0" />
-              <span>Web検索機能は公開情報を対象とします。機密情報や個人情報は入力しないでください。</span>
-            </div>
+            <WebSearchWarning />
           </div>
         </div>
       );
@@ -251,55 +243,7 @@ const Sidebar = () => {
                   disabled={isLoading}
                 />
               </div>
-              <div className="mt-3 flex items-start gap-2 p-2 text-xs text-red-800 bg-red-100 border border-red-200 rounded-lg">
-                <AlertTriangle size={24} className="flex-shrink-0" />
-                <span>Web検索機能は公開情報を対象とします。機密情報や個人情報は入力しないでください。</span>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (currentModelConfig.type === 'reasoning') {
-      return (
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="reasoningPreset" className="block text-sm font-medium text-gray-700">リーゾニング精度</label>
-            <select
-              id="reasoningPreset"
-              value={reasoningPreset}
-              onChange={(e) => setReasoningPreset(e.target.value as ReasoningPreset)}
-              className="w-full p-2 mt-1 bg-white border border-[#E0E0E0] rounded-md text-black"
-              disabled={isLoading}
-            >
-              <option value="low">Low</option>
-              <option value="middle">Middle</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-
-          {selectedModel === 'o3' && (
-            <div className="pt-4 border-t border-[#E0E0E0]">
-               <h3 className="flex items-center gap-2 text-md font-semibold mb-3 text-gray-800">
-                <Globe size={18} />
-                Tools
-              </h3>
-              <div className="flex items-center justify-between">
-                <label htmlFor="webSearch" className="text-sm font-medium text-gray-800">Web検索を有効にする</label>
-                <input
-                  type="checkbox"
-                  id="webSearch"
-                  checked={isWebSearchEnabled}
-                  onChange={(e) => setIsWebSearchEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-[#A61C4B] focus:ring-[#A61C4B]"
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="mt-3 flex items-start gap-2 p-2 text-xs text-red-800 bg-red-100 border border-red-200 rounded-lg">
-                <AlertTriangle size={24} className="flex-shrink-0" />
-                <span>Web検索機能は公開情報を対象とします。機密情報や個人情報は入力しないでください。</span>
-              </div>
+              <WebSearchWarning />
             </div>
           )}
         </div>
@@ -342,7 +286,7 @@ const Sidebar = () => {
 
       <div className="mt-4 pt-4 border-t border-[#E0E0E0]">
         <h3 className="flex items-center gap-2 text-md font-semibold mb-3 text-gray-800">
-          {currentModelConfig?.type === 'reasoning' ? <BrainCircuit size={18} /> : <SlidersHorizontal size={18} />}
+          <SlidersHorizontal size={18} />
           Model Settings
         </h3>
         {renderModelSettings()}
@@ -371,13 +315,6 @@ const Sidebar = () => {
         className="w-full p-2 rounded-lg bg-gray-100 border border-[#E0E0E0] text-black resize-y focus:outline-none focus:ring-2 focus:ring-[#A61C4B] disabled:opacity-50 h-32"
       />
 
-      <h2 className="text-lg font-semibold mt-6 mb-4">File Content</h2>
-      <textarea
-        value={fileContent}
-        readOnly
-        placeholder="Text extracted from uploaded files will appear here..."
-        className="w-full p-2 rounded-lg bg-gray-100 border border-[#E0E0E0] text-gray-600 resize-y focus:outline-none focus:ring-1 focus:ring-gray-400 h-48"
-      />
     </aside>
   );
 };

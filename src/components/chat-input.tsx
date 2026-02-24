@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, FormEvent, KeyboardEvent, useEffect } from 'react'; // Import useEffect
+import { useState, useRef, FormEvent, KeyboardEvent } from 'react';
 import { useAppContext, Attachment } from '@/context/AppContext';
 import { Paperclip, X, Send, Square } from 'lucide-react';
 import Textarea from 'react-textarea-autosize';
@@ -15,17 +15,14 @@ const ChatInput = () => {
     handleInputChange,
     setFileContents,
     setImageUris,
+    setPdfUris,
     fileContents,
     imageUris,
+    pdfUris,
     stopGeneration,
+    setError,
   } = useAppContext();
 
-  // --- DEBUG LOG --- 
-  useEffect(() => {
-    console.log(`[DEBUG_UI] isLoading: ${isLoading}, isFileProcessing: ${isFileProcessing}`);
-  }, [isLoading, isFileProcessing]);
-  // --- END DEBUG LOG ---
-  
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,6 +37,7 @@ const ChatInput = () => {
 
     const newAttachments: Attachment[] = [...attachments]; // Keep existing UI attachments
     const newImageUris: string[] = [...imageUris]; // Keep existing image URIs from AppContext
+    const newPdfUris: string[] = [...pdfUris]; // Keep existing PDF URIs from AppContext
     const newFileContents: Array<{ name: string; content: string }> = [...fileContents]; // Keep existing file contents from AppContext
 
     try {
@@ -51,7 +49,6 @@ const ChatInput = () => {
         });
         if (!signedUrlResponse.ok) throw new Error('Failed to get signed URL.');
         const { uploadUrl, gcsUri } = await signedUrlResponse.json();
-        console.log('[DEBUG] GCS URI obtained:', gcsUri);
 
         const uploadResponse = await fetch(uploadUrl, {
           method: 'PUT',
@@ -70,6 +67,9 @@ const ChatInput = () => {
 
         if (file.type.startsWith('image/')) {
           newImageUris.push(gcsUri);
+        } else if (file.type === 'application/pdf') {
+          // PDF files are handled natively by models — just store the GCS URI
+          newPdfUris.push(gcsUri);
         } else {
           const extractResponse = await fetch('/api/extract-text', {
             method: 'POST',
@@ -85,18 +85,15 @@ const ChatInput = () => {
         }
       }
 
-      console.log('[DEBUG] Setting attachments. Total:', newAttachments.length);
-      console.log('[DEBUG] Setting imageUris. Total:', newImageUris.length);
-      console.log('[DEBUG] Setting fileContents. Total:', newFileContents.length);
-      
       setAttachments(newAttachments);
       setImageUris(newImageUris);
+      setPdfUris(newPdfUris);
       setFileContents(newFileContents);
       setIsFileProcessing(false);
     } catch (error) {
       console.error('File processing error:', error);
       const errorMessage = error instanceof Error ? error.message : 'ファイルの処理中にエラーが発生しました。';
-      alert(errorMessage);
+      setError(errorMessage);
       setIsFileProcessing(false);
     } finally {
       if (e.target) {
@@ -119,16 +116,16 @@ const ChatInput = () => {
     
     // Update AppContext state
     if (attachmentToRemove.type.startsWith('image/')) {
-      // Remove from imageUris
       const updatedImageUris = imageUris.filter(uri => uri !== attachmentToRemove.gcsUri);
       setImageUris(updatedImageUris);
+    } else if (attachmentToRemove.type === 'application/pdf') {
+      const updatedPdfUris = pdfUris.filter(uri => uri !== attachmentToRemove.gcsUri);
+      setPdfUris(updatedPdfUris);
     } else {
-      // Remove from fileContents
       const updatedFileContents = fileContents.filter(fc => fc.name !== attachmentToRemove.name);
       setFileContents(updatedFileContents);
     }
     
-    console.log('[DEBUG] Removed attachment:', attachmentToRemove.name);
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -137,7 +134,11 @@ const ChatInput = () => {
     if ((!input.trim() && attachments.length === 0) || totalLoading) return;
 
     const previewUrls = attachments.map(att => att.previewUrl).filter(url => url !== '');
-    submitPrompt(input, previewUrls);
+    const pdfFileNames = attachments.filter(att => att.type === 'application/pdf').map(att => att.name);
+    const docFileNames = attachments
+      .filter(att => !att.type.startsWith('image/') && att.type !== 'application/pdf')
+      .map(att => att.name);
+    submitPrompt(input, previewUrls, pdfFileNames, docFileNames);
 
     // Clear the local attachment state in the input component.
     setAttachments([]);

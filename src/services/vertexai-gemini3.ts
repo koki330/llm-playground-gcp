@@ -1,10 +1,11 @@
 import { GoogleAuth } from 'google-auth-library';
+import { encodeTextChunk, encodeFinish } from '@/utils/sse-encoder';
 
 interface Gemini3StreamParams {
   model: string;
   messages: Array<{
     role: string;
-    content: string | Array<{type: string; text?: string; image?: string}>;
+    content: string | Array<{type: string; text?: string; image?: string; pdf?: string}>;
   }>;
   systemPrompt?: string;
   temperature?: number;
@@ -59,6 +60,16 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
         } else if (part.type === 'image' && part.image) {
           // Extract base64 data from data URL
           const matches = part.image.match(/^data:([^;]+);base64,(.+)$/);
+          if (matches) {
+            return {
+              inlineData: {
+                mimeType: matches[1],
+                data: matches[2],
+              },
+            };
+          }
+        } else if (part.type === 'pdf' && part.pdf) {
+          const matches = part.pdf.match(/^data:([^;]+);base64,(.+)$/);
           if (matches) {
             return {
               inlineData: {
@@ -122,12 +133,6 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
   // Gemini 3 uses global endpoint (no region prefix in hostname)
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:streamGenerateContent`;
 
-  console.log('[DEBUG] Calling Vertex AI Gemini 3 with endpoint:', endpoint);
-  console.log('[DEBUG] Gemini 3 Request Body:', JSON.stringify(requestBody, null, 2));
-  if (groundingEnabled) {
-    console.log('[DEBUG] Gemini 3 Grounding ENABLED - tools:', JSON.stringify(requestBody.tools, null, 2));
-  }
-
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -148,7 +153,6 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
   }
 
   // Transform the Vertex AI stream to AI SDK format
-  const encoder = new TextEncoder();
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
 
@@ -200,14 +204,13 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
                     if (item.usageMetadata) {
                       totalInputTokens = item.usageMetadata.promptTokenCount || 0;
                       totalOutputTokens = item.usageMetadata.candidatesTokenCount || 0;
-                      console.log(`[DEBUG] Gemini 3 usage metadata - Input: ${totalInputTokens}, Output: ${totalOutputTokens}`);
                     }
                     
                     if (item.candidates && item.candidates[0]?.content?.parts) {
                       for (const part of item.candidates[0].content.parts) {
                         // Skip thought parts, only send regular text
                         if (part.text && !part.thought) {
-                          controller.enqueue(encoder.encode(`0:${JSON.stringify(part.text)}\n`));
+                          controller.enqueue(encodeTextChunk(part.text));
                         }
                       }
                     }
@@ -237,6 +240,7 @@ export async function streamGemini3Response(params: Gemini3StreamParams): Promis
           }
         }
 
+        controller.enqueue(encodeFinish());
         controller.close();
       } catch (error) {
         console.error('[ERROR] Gemini 3 stream error:', error);
